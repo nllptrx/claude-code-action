@@ -21,11 +21,14 @@ type CommonInputs = {
   customInstructions: string;
   directPrompt: string;
   overridePrompt: string;
+  prompt: string;
   baseBranch?: string;
   branchPrefix: string;
+  branchNameTemplate?: string;
   useStickyComment: boolean;
   additionalPermissions: Map<string, string>;
   useCommitSigning: boolean;
+  sshSigningKey: string;
   includeCommentsByActor?: string;
   excludeCommentsByActor?: string;
 };
@@ -37,6 +40,7 @@ type BaseContext = {
     owner: string;
     repo: string;
     full_name: string;
+    default_branch?: string;
   };
   actor: string;
   inputs: CommonInputs;
@@ -84,6 +88,7 @@ export function parseGitHubContext(): GitHubContext {
       owner: context.repo.owner,
       repo: context.repo.repo,
       full_name: `${context.repo.owner}/${context.repo.repo}`,
+      default_branch: context.payload.repository?.default_branch,
     },
     actor: context.actor,
     inputs: {
@@ -104,6 +109,8 @@ export function parseGitHubContext(): GitHubContext {
         process.env.ADDITIONAL_PERMISSIONS ?? "",
       ),
       useCommitSigning: process.env.USE_COMMIT_SIGNING === "true",
+      sshSigningKey: process.env.SSH_SIGNING_KEY ?? "",
+      prompt: process.env.PROMPT ?? "",
       includeCommentsByActor: process.env.INCLUDE_COMMENTS_BY_ACTOR ?? "",
       excludeCommentsByActor: process.env.EXCLUDE_COMMENTS_BY_ACTOR ?? "",
     },

@@ -141,6 +141,14 @@ export async function fetchGitHubData({
         parseInt(prNumber),
       );
 
+      // Cross-repository (fork) detection: both Gitea and GitHub REST return
+      // head.repo and base.repo objects. When their IDs differ the PR originates
+      // from a fork and must be fetched via `refs/pull/N/head`.
+      const headRepoId = (prResponse.data.head as any)?.repo?.id;
+      const baseRepoId = (prResponse.data.base as any)?.repo?.id;
+      const isCrossRepository =
+        headRepoId != null && baseRepoId != null && headRepoId !== baseRepoId;
+
       contextData = {
         title: prResponse.data.title,
         body: prResponse.data.body || "",
@@ -152,7 +160,11 @@ export async function fetchGitHubData({
         additions: prResponse.data.additions || 0,
         deletions: prResponse.data.deletions || 0,
         state: prResponse.data.state.toUpperCase(),
-        commits: { totalCount: 0, nodes: [] },
+        isCrossRepository,
+        commits: {
+          totalCount: (prResponse.data as any).commits || 0,
+          nodes: [],
+        },
         files: { nodes: [] },
         comments: { nodes: [] },
         reviews: { nodes: [] },

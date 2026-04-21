@@ -7,6 +7,7 @@
  */
 
 import { $ } from "bun";
+import { execFileSync } from "child_process";
 import * as core from "@actions/core";
 import type { ParsedGitHubContext } from "../context";
 import type { GitHubPullRequest } from "../types";
@@ -19,7 +20,7 @@ import type { FetchDataResult } from "../data/fetcher";
  *
  * Valid branch names:
  * - Start with alphanumeric character (not dash, to prevent option injection)
- * - Contain only alphanumeric, forward slash, hyphen, underscore, or period
+ * - Contain only alphanumeric, forward slash, hyphen, underscore, period, or hash (#)
  * - Do not start or end with a period
  * - Do not end with a slash
  * - Do not contain '..' (path traversal)
@@ -49,12 +50,14 @@ export function validateBranchName(branchName: string): void {
     );
   }
 
-  // Strict whitelist pattern: alphanumeric start, then alphanumeric/slash/hyphen/underscore/period
-  const validPattern = /^[a-zA-Z0-9][a-zA-Z0-9/_.-]*$/;
+  // Strict whitelist pattern: alphanumeric start, then alphanumeric/slash/hyphen/underscore/period/hash.
+  // # is valid per git-check-ref-format and commonly used in branch names like "fix/#123-description".
+  // All git calls use execFileSync (not shell interpolation), so # carries no injection risk.
+  const validPattern = /^[a-zA-Z0-9][a-zA-Z0-9/_.#-]*$/;
 
   if (!validPattern.test(branchName)) {
     throw new Error(
-      `Invalid branch name: "${branchName}". Branch names must start with an alphanumeric character and contain only alphanumeric characters, forward slashes, hyphens, underscores, or periods.`,
+      `Invalid branch name: "${branchName}". Branch names must start with an alphanumeric character and contain only alphanumeric characters, forward slashes, hyphens, underscores, periods, or hashes (#).`,
     );
   }
 
@@ -108,6 +111,10 @@ export function validateBranchName(branchName: string): void {
  *
  * @param args - Git command arguments (e.g., ["checkout", "branch-name"])
  */
+function execGit(args: string[]): void {
+  execFileSync("git", args, { stdio: "inherit", env: process.env });
+}
+
 export type BranchInfo = {
   baseBranch: string;
   claudeBranch?: string;
@@ -165,10 +172,29 @@ export async function setupBranch(
       const branchName = prData.headRefName;
       validateBranchName(branchName);
 
-      // Execute git commands to checkout PR branch (shallow fetch for performance)
-      // Fetch the branch with a depth of 20 to avoid fetching too much history, while still allowing for some context
-      await $`git fetch origin --depth=20 ${branchName}`;
-      await $`git checkout ${branchName}`;
+      // Determine optimal fetch depth based on PR commit count, with a minimum of 20
+      const commitCount = prData.commits?.totalCount ?? 0;
+      const fetchDepth = Math.max(commitCount, 20);
+
+      // For cross-repository (fork) PRs, fetch via the pull ref since the
+      // branch only exists on the fork's remote, not on origin. Gitea supports
+      // `refs/pull/N/head` by convention (GitHub-compatible).
+      if (prData.isCrossRepository) {
+        console.log(
+          `PR #${entityNumber} is from a fork, fetching via refs/pull/${entityNumber}/head...`,
+        );
+        execGit([
+          "fetch",
+          "origin",
+          `--depth=${fetchDepth}`,
+          `pull/${entityNumber}/head:${branchName}`,
+        ]);
+      } else {
+        // Execute git commands to checkout PR branch (dynamic depth based on PR size)
+        // Using execFileSync (not shell template literals) to avoid command injection.
+        execGit(["fetch", "origin", `--depth=${fetchDepth}`, branchName]);
+      }
+      execGit(["checkout", branchName, "--"]);
 
       console.log(`Successfully checked out PR branch for PR #${entityNumber}`);
 

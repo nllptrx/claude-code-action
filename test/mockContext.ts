@@ -25,6 +25,8 @@ const defaultInputs = {
   useStickyComment: false,
   additionalPermissions: new Map<string, string>(),
   useCommitSigning: false,
+  sshSigningKey: "",
+  prompt: "",
   includeCommentsByActor: "",
   excludeCommentsByActor: "",
 };
@@ -33,6 +35,7 @@ const defaultRepository = {
   owner: "test-owner",
   repo: "test-repo",
   full_name: "test-owner/test-repo",
+  default_branch: "main",
 };
 
 export const createMockContext = (
