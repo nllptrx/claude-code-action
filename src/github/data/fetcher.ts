@@ -141,14 +141,23 @@ export async function fetchGitHubData({
         parseInt(prNumber),
       );
 
-      // Cross-repository (fork) detection: both Gitea and GitHub REST return
-      // head.repo and base.repo objects. When their IDs differ the PR originates
-      // from a fork and must be fetched via `refs/pull/N/head`.
-      const headRepoId = (prResponse.data.head as any)?.repo?.id;
-      const baseRepoId = (prResponse.data.base as any)?.repo?.id;
+      // Cross-repository (fork) detection.
+      // Gitea's PRBranchInfo exposes a flat `repo_id` (int64) as well as the
+      // nested `repo.id`. Prefer the flat field when present (cheaper, always
+      // returned); fall back to the nested id. GitHub's REST uses `head.repo.id`
+      // / `base.repo.id` so the nested path is the compatible fallback.
+      const headBranch = prResponse.data.head as any;
+      const baseBranch = prResponse.data.base as any;
+      const headRepoId = headBranch?.repo_id ?? headBranch?.repo?.id;
+      const baseRepoId = baseBranch?.repo_id ?? baseBranch?.repo?.id;
       const isCrossRepository =
         headRepoId != null && baseRepoId != null && headRepoId !== baseRepoId;
 
+      // Gitea's PullRequest response does NOT include a `commits` count field
+      // (unlike GitHub). Leaving totalCount at 0 is safe: downstream uses it
+      // only to compute fetch depth, where Math.max(count, 20) falls back to
+      // 20 regardless. If a precise count is ever needed, call
+      // `GET /repos/{owner}/{repo}/pulls/{index}/commits` and count entries.
       contextData = {
         title: prResponse.data.title,
         body: prResponse.data.body || "",
@@ -161,10 +170,7 @@ export async function fetchGitHubData({
         deletions: prResponse.data.deletions || 0,
         state: prResponse.data.state.toUpperCase(),
         isCrossRepository,
-        commits: {
-          totalCount: (prResponse.data as any).commits || 0,
-          nodes: [],
-        },
+        commits: { totalCount: 0, nodes: [] },
         files: { nodes: [] },
         comments: { nodes: [] },
         reviews: { nodes: [] },

@@ -137,6 +137,18 @@ inputs:
     description: "Git user.email for commits made by Claude"
     required: false
     default: "claude@anthropic.com"
+  ssh_signing_key:
+    description: "SSH private key for signing commits. When provided, git will be configured to use SSH signing. Takes precedence over use_commit_signing."
+    required: false
+    default: ""
+  prompt:
+    description: "Explicit prompt for Claude (alternative to direct_prompt/override_prompt). Forwarded to the action as $PROMPT."
+    required: false
+    default: ""
+  branch_name_template:
+    description: "Template for generated branch names. Placeholders are expanded by src/utils/branch-template.ts."
+    required: false
+    default: ""
 
 outputs:
   execution_file:
@@ -179,6 +191,9 @@ runs:
         CUSTOM_INSTRUCTIONS: ${{ inputs.custom_instructions }}
         DIRECT_PROMPT: ${{ inputs.direct_prompt }}
         OVERRIDE_PROMPT: ${{ inputs.override_prompt }}
+        PROMPT: ${{ inputs.prompt }}
+        BRANCH_NAME_TEMPLATE: ${{ inputs.branch_name_template }}
+        SSH_SIGNING_KEY: ${{ inputs.ssh_signing_key }}
         ADDITIONAL_PERMISSIONS: ${{ inputs.additional_permissions }}
         INCLUDE_COMMENTS_BY_ACTOR: ${{ inputs.include_comments_by_actor }}
         EXCLUDE_COMMENTS_BY_ACTOR: ${{ inputs.exclude_comments_by_actor }}
