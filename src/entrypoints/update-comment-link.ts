@@ -9,6 +9,7 @@ import {
 import {
   parseGitHubContext,
   isPullRequestReviewCommentEvent,
+  isEntityContext,
 } from "../github/context";
 import { GITEA_SERVER_URL } from "../github/api/config";
 import { checkAndDeleteEmptyBranch } from "../github/operations/branch-cleanup";
@@ -28,6 +29,11 @@ async function run() {
     const triggerUsername = process.env.TRIGGER_USERNAME;
 
     const context = parseGitHubContext();
+    if (!isEntityContext(context)) {
+      throw new Error(
+        `update-comment-link requires an entity context (issue/PR), got ${context.eventName}`,
+      );
+    }
     const { owner, repo } = context.repository;
     const client = createClient(githubToken);
 

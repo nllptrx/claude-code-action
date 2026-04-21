@@ -21,14 +21,14 @@ type CommonInputs = {
   customInstructions: string;
   directPrompt: string;
   overridePrompt: string;
-  prompt: string;
+  prompt?: string;
   baseBranch?: string;
   branchPrefix: string;
   branchNameTemplate?: string;
   useStickyComment: boolean;
   additionalPermissions: Map<string, string>;
   useCommitSigning: boolean;
-  sshSigningKey: string;
+  sshSigningKey?: string;
   includeCommentsByActor?: string;
   excludeCommentsByActor?: string;
 };

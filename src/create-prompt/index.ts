@@ -416,12 +416,17 @@ export function getEventTypeAndContext(envVars: PreparedContext): {
           eventType: "ISSUE_LABELED",
           triggerContext: `issue labeled with '${eventData.labelTrigger}'`,
         };
+      } else if (eventData.eventAction === "assigned") {
+        return {
+          eventType: "ISSUE_ASSIGNED",
+          triggerContext: eventData.assigneeTrigger
+            ? `issue assigned to '${eventData.assigneeTrigger}'`
+            : `issue assigned event`,
+        };
       }
       return {
-        eventType: "ISSUE_ASSIGNED",
-        triggerContext: eventData.assigneeTrigger
-          ? `issue assigned to '${eventData.assigneeTrigger}'`
-          : `issue assigned event`,
+        eventType: "ISSUE_EVENT",
+        triggerContext: `issue ${eventData.eventAction ?? "event"}`,
       };
 
     case "pull_request":
