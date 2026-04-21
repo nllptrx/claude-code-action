@@ -80,6 +80,87 @@ describe("checkContainsTrigger", () => {
     });
   });
 
+  describe("override prompt trigger", () => {
+    const baseInputs = {
+      mode: "tag" as const,
+      triggerPhrase: "/claude",
+      assigneeTrigger: "",
+      labelTrigger: "",
+      allowedTools: [],
+      disallowedTools: [],
+      customInstructions: "",
+      branchPrefix: "claude/",
+      useStickyComment: false,
+      additionalPermissions: new Map<string, string>(),
+      useCommitSigning: false,
+    };
+
+    const bareIssuePayload = {
+      action: "opened",
+      issue: {
+        number: 1,
+        title: "No trigger phrase",
+        body: "Body without any trigger",
+        created_at: "2023-01-01T00:00:00Z",
+        user: { login: "testuser" },
+      },
+    } as IssuesEvent;
+
+    it("returns true when only override_prompt is set", () => {
+      const context = createMockContext({
+        eventName: "issues",
+        eventAction: "opened",
+        payload: bareIssuePayload,
+        inputs: {
+          ...baseInputs,
+          directPrompt: "",
+          overridePrompt: "Custom override template: $REPO",
+        },
+      });
+      expect(checkContainsTrigger(context)).toBe(true);
+    });
+
+    it("returns true when both direct_prompt and override_prompt are set", () => {
+      const context = createMockContext({
+        eventName: "issues",
+        eventAction: "opened",
+        payload: bareIssuePayload,
+        inputs: {
+          ...baseInputs,
+          directPrompt: "Fix this",
+          overridePrompt: "Override this",
+        },
+      });
+      expect(checkContainsTrigger(context)).toBe(true);
+    });
+
+    it("returns false when both prompts are empty and nothing else triggers", () => {
+      const context = createMockContext({
+        eventName: "issues",
+        eventAction: "opened",
+        payload: bareIssuePayload,
+        inputs: {
+          ...baseInputs,
+          directPrompt: "",
+          overridePrompt: "",
+        },
+      });
+      expect(checkContainsTrigger(context)).toBe(false);
+    });
+
+    it("treats override_prompt as distinct from direct_prompt on the context", () => {
+      const context = createMockContext({
+        inputs: {
+          ...baseInputs,
+          directPrompt: "A",
+          overridePrompt: "B",
+        },
+      });
+      expect(context.inputs.directPrompt).toBe("A");
+      expect(context.inputs.overridePrompt).toBe("B");
+    });
+  });
+
   describe("assignee trigger", () => {
     it("should return true when issue is assigned to the trigger user", () => {
       const context = mockIssueAssignedContext;
