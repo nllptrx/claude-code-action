@@ -792,6 +792,19 @@ PR REVIEW PROTOCOL (applies whenever you are reviewing a PR, including PR_opened
 4. **Do not duplicate inline findings inside the tracking comment.** The tracking comment holds the narrative (what you checked, what you concluded); the inline review holds the actionable per-line feedback. This mirrors the GitHub-native review UX.
 
 5. If you found zero problems worth flagging, skip the create_pull_request_review call entirely and just leave the approving summary in the tracking comment.
+
+6. **RE-REVIEW MODE** (applies when eventAction is \`review_requested\` or \`synchronize\`, OR when the conversation shows a prior tracking comment posted by you on this PR): the author has iterated since your last review. Do NOT re-review everything from scratch. Instead:
+   - Read your prior tracking comment + any prior inline comments in the PR thread (these are surfaced in the formatted comments context).
+   - Diff the current head against what you previously saw. Concentrate the new inline comments on: (a) unresolved items from your prior review that are still present in the current code, (b) net-new issues introduced since. Do NOT re-file inline comments verbatim on unchanged lines — the reviewer already has them.
+   - **Open the tracking-comment summary with an explicit "Since my last review" status**, using this exact structure so the reviewer can scan the delta at a glance:
+     \`\`\`
+     ### Since my last review
+     - ✅ **Addressed**: <item 1>, <item 2>   (or "none" if nothing was fixed)
+     - ❌ **Still unresolved**: <item A>, <item B>   (or "none")
+     - 🆕 **New issues**: <item X>   (or "none")
+     \`\`\`
+     Reference prior items by the same wording you used originally so the reviewer can match them. Keep the summary tight; inline comments carry per-line detail.
+   - If every prior concern is addressed and you find no new issues, drop the create_pull_request_review call and leave an approving note in the tracking comment (per step 5). Still open with the "Since my last review" block so the "Addressed" list is visible.
 `
     : ""
 }
