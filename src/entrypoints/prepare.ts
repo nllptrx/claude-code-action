@@ -62,6 +62,37 @@ async function run() {
     core.setOutput("contains_trigger", containsTrigger.toString());
     core.setOutput("GITHUB_TOKEN", githubToken);
 
+    // Compute effective git author (bot_id/bot_name override
+    // claude_git_name/email if set).
+    //
+    // GitHub's noreply email format is `{id}+{login}@users.noreply.github.com`;
+    // Gitea uses `{id}+{login}@users.noreply.{hostname}` where hostname is
+    // derived from GITEA_SERVER_URL. This mirrors configureGitAuth's format
+    // so git commits attribute to the bot account and can be linked to the
+    // user in the Gitea UI.
+    const botId = context.inputs.botId?.trim() ?? "";
+    const botName = context.inputs.botName?.trim() ?? "";
+    if (botId && botName && /^\d+$/.test(botId)) {
+      const serverUrl = process.env.GITEA_SERVER_URL || "https://github.com";
+      let hostname = "github.com";
+      try {
+        hostname = new URL(serverUrl).hostname;
+      } catch {
+        // Fall back to github.com if GITEA_SERVER_URL isn't a valid URL.
+      }
+      const noreplyDomain =
+        hostname === "github.com"
+          ? "users.noreply.github.com"
+          : `users.noreply.${hostname}`;
+      const effectiveName = botName;
+      const effectiveEmail = `${botId}+${botName}@${noreplyDomain}`;
+      core.setOutput("effective_git_name", effectiveName);
+      core.setOutput("effective_git_email", effectiveEmail);
+      console.log(
+        `Effective git author from bot_id/bot_name: ${effectiveName} <${effectiveEmail}>`,
+      );
+    }
+
     if (!containsTrigger) {
       console.log("❌ No trigger found, skipping remaining steps");
       console.log("Event was:", context.eventName);

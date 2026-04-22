@@ -311,8 +311,12 @@ runs:
         GITHUB_TOKEN: ${{ steps.prepare.outputs.GITHUB_TOKEN }}
 
         # Git configuration
-        CLAUDE_GIT_NAME: ${{ inputs.claude_git_name }}
-        CLAUDE_GIT_EMAIL: ${{ inputs.claude_git_email }}
+        # bot_id + bot_name (when both set) override the git author strings
+        # with a noreply-format email that links commits back to the bot
+        # account in the Gitea/GitHub UI. prepare.ts computes these outputs
+        # only when both inputs are valid; fall back to claude_git_* otherwise.
+        CLAUDE_GIT_NAME: ${{ steps.prepare.outputs.effective_git_name || inputs.claude_git_name }}
+        CLAUDE_GIT_EMAIL: ${{ steps.prepare.outputs.effective_git_email || inputs.claude_git_email }}
 
         # Provider configuration (for future cloud provider support)
         ANTHROPIC_BASE_URL: ${{ env.ANTHROPIC_BASE_URL }}
