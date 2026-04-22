@@ -2,6 +2,9 @@
 .claude-pat
 .contributor-token
 .runner-token
+.nllptrx-token
+*.pat
+*.token
 .env
 .env.runtime
 gitea-data/
