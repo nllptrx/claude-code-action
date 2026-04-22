@@ -32,20 +32,20 @@ bun scripts/e2e-gitea/e2e.ts down
 
 ## What `up` creates
 
-| Resource  | Identifier                    | Purpose                                                          |
-| --------- | ----------------------------- | ---------------------------------------------------------------- |
-| Container | `gitea-e2e`                   | Gitea 1.24 on `127.0.0.1:3030`                                   |
-| Container | `gitea-runner-e2e`            | `act_runner` registered with Gitea                               |
-| User      | `admin`                       | site admin, token → `.admin-token`                               |
-| User      | `claude`                      | write-only collaborator, token → `.claude-pat` (acts as the bot) |
-| User      | `claude-bot`                  | non-admin PR author, token → `.bob-token`                        |
-| User      | `bob`                         | non-write user for `allowed_non_write_users` bypass tests        |
-| Repo      | `admin/e2e-dummy`             | the repo the action is exercised against                         |
-| Repo      | `admin/claude-code-action`    | mirror of this repo's `gitea` branch                             |
-| Secret    | `CLAUDE_PAT`                  | set to claude's PAT; used by the installed workflow              |
-| Secret    | `CLAUDE_CODE_OAUTH_TOKEN`     | you set this via `secret` subcommand                             |
-| Workflow  | `.gitea/workflows/claude.yml` | installed into the test repo                                     |
-| Label     | `claude-task`                 | on the test repo, for label-trigger tests                        |
+| Resource  | Identifier                    | Purpose                                                                   |
+| --------- | ----------------------------- | ------------------------------------------------------------------------- |
+| Container | `gitea-e2e`                   | Gitea 1.24 on `127.0.0.1:3030`                                            |
+| Container | `gitea-runner-e2e`            | `act_runner` registered with Gitea                                        |
+| User      | `admin`                       | site admin, token → `.admin-token`                                        |
+| User      | `claude`                      | write-only collaborator, token → `.claude-pat` (acts as the bot)          |
+| User      | `contributor`                 | non-admin PR author (simulates a developer), token → `.contributor-token` |
+| User      | `bob`                         | non-write user for `allowed_non_write_users` bypass tests                 |
+| Repo      | `admin/e2e-dummy`             | the repo the action is exercised against                                  |
+| Repo      | `admin/claude-code-action`    | mirror of this repo's `gitea` branch                                      |
+| Secret    | `CLAUDE_PAT`                  | set to claude's PAT; used by the installed workflow                       |
+| Secret    | `CLAUDE_CODE_OAUTH_TOKEN`     | you set this via `secret` subcommand                                      |
+| Workflow  | `.gitea/workflows/claude.yml` | installed into the test repo                                              |
+| Label     | `claude-task`                 | on the test repo, for label-trigger tests                                 |
 
 All state lives under `scripts/e2e-gitea/` (data dirs + token files) and is gitignored.
 

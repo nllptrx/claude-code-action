@@ -9,7 +9,7 @@ import { $ } from "bun";
 import { join } from "path";
 import { homedir } from "os";
 import { mkdir, writeFile, rm } from "fs/promises";
-import type { ParsedGitHubContext } from "../context";
+import type { GitHubContext } from "../context";
 import { GITEA_SERVER_URL } from "../api/config";
 
 const SSH_SIGNING_KEY_PATH = join(homedir(), ".ssh", "claude_signing_key");
@@ -28,9 +28,7 @@ type GitUser = {
  * Ported from upstream's modes/{agent,tag}/index.ts pattern:
  *   const user = { login: context.inputs.botName, id: parseInt(context.inputs.botId) };
  */
-export function getBotUserFromInputs(
-  context: ParsedGitHubContext,
-): GitUser | null {
+export function getBotUserFromInputs(context: GitHubContext): GitUser | null {
   const botName = context.inputs.botName?.trim();
   const botId = context.inputs.botId?.trim();
   if (!botName || !botId) return null;
@@ -41,7 +39,7 @@ export function getBotUserFromInputs(
 
 export async function configureGitAuth(
   githubToken: string,
-  context: ParsedGitHubContext,
+  context: GitHubContext,
   user: GitUser | null,
 ) {
   console.log("Configuring git authentication for non-signing mode");
@@ -59,7 +57,13 @@ export async function configureGitAuth(
   //  2. `bot_id` / `bot_name` action inputs (via getBotUserFromInputs) —
   //     lets maintainers pin the action to a specific bot account without
   //     touching the caller.
-  //  3. Hard-coded github-actions[bot] fallback (legacy behavior).
+  //  3. `claude_git_name` / `claude_git_email` action inputs (exposed as the
+  //     CLAUDE_GIT_NAME / CLAUDE_GIT_EMAIL env vars). Before the unified
+  //     entrypoint, these were only honored by ensureGitUserConfigured in
+  //     local-git-ops-server, which skips when config is already set —
+  //     calling configureGitAuth earlier now would otherwise strand the
+  //     inputs, so honor them here.
+  //  4. Hard-coded github-actions[bot] fallback (legacy behavior).
   console.log("Configuring git user...");
   const resolvedUser = user ?? getBotUserFromInputs(context);
   if (resolvedUser) {
@@ -69,9 +73,15 @@ export async function configureGitAuth(
     await $`git config user.name "${botName}"`;
     await $`git config user.email "${botId}+${botName}@${noreplyDomain}"`;
     console.log(`✓ Set git user as ${botName}`);
+  } else if (process.env.CLAUDE_GIT_NAME || process.env.CLAUDE_GIT_EMAIL) {
+    const gitName = process.env.CLAUDE_GIT_NAME || "Claude";
+    const gitEmail = process.env.CLAUDE_GIT_EMAIL || "claude@anthropic.com";
+    console.log(`Setting git user from claude_git_* inputs: ${gitName}`);
+    await $`git config user.name "${gitName}"`;
+    await $`git config user.email "${gitEmail}"`;
   } else {
     console.log(
-      "No user data in comment and no bot_id/bot_name set, using default bot user",
+      "No user data in comment, no bot_id/bot_name, no claude_git_*; using default bot user",
     );
     await $`git config user.name "github-actions[bot]"`;
     await $`git config user.email "41898282+github-actions[bot]@${noreplyDomain}"`;
@@ -103,14 +113,18 @@ export async function configureGitAuth(
       '#!/bin/sh\necho username=x-access-token\necho password="$GH_TOKEN"\n',
       { mode: 0o700 },
     );
-    const cleanUrl = `https://${serverUrl.host}/${context.repository.owner}/${context.repository.repo}.git`;
+    const cleanUrl = `${serverUrl.protocol}//${serverUrl.host}/${context.repository.owner}/${context.repository.repo}.git`;
     await $`git remote set-url origin ${cleanUrl}`;
     await $`git config credential.helper ${helperPath}`;
     console.log("✓ Configured credential helper");
   } else {
     // Update the remote URL to include the token for authentication
     console.log("Updating remote URL with authentication...");
-    const remoteUrl = `https://x-access-token:${githubToken}@${serverUrl.host}/${context.repository.owner}/${context.repository.repo}.git`;
+    // URL.protocol includes the trailing colon (e.g. "http:"), so the
+    // expression renders "http://host" or "https://host" correctly — Gitea
+    // dev instances listen on HTTP; hardcoding https here broke PR-event
+    // runs when restoreConfigFromBase invoked `git fetch`.
+    const remoteUrl = `${serverUrl.protocol}//x-access-token:${githubToken}@${serverUrl.host}/${context.repository.owner}/${context.repository.repo}.git`;
     await $`git remote set-url origin ${remoteUrl}`;
     console.log("✓ Updated remote URL with authentication token");
   }

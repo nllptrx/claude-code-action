@@ -157,6 +157,21 @@ export async function runClaudeWithSdk(
   const messages: SDKMessage[] = [];
   let resultMessage: SDKResultMessage | undefined;
 
+  // Incremental flush: external process-exits (timeout callback in the
+  // unified run.ts) read EXECUTION_FILE to attach a debug log. Without
+  // periodic writes that file is empty until the iterator naturally
+  // finishes, which defeats the point on timed-out runs.
+  let lastFlushedCount = 0;
+  const flushMessages = async () => {
+    if (messages.length === lastFlushedCount) return;
+    try {
+      await writeFile(EXECUTION_FILE, JSON.stringify(messages, null, 2));
+      lastFlushedCount = messages.length;
+    } catch (writeError) {
+      core.warning(`Failed to flush partial execution log: ${writeError}`);
+    }
+  };
+
   try {
     for await (const message of query({ prompt, options: sdkOptions })) {
       messages.push(message);
@@ -169,9 +184,16 @@ export async function runClaudeWithSdk(
       if (message.type === "result") {
         resultMessage = message as SDKResultMessage;
       }
+
+      // Checkpoint after each message. Small JSON blob per turn; cost is
+      // negligible next to the SDK's own latency and protects against
+      // external aborts (SIGTERM on job timeout, process.exit from our
+      // timeout callback).
+      await flushMessages();
     }
   } catch (error) {
     console.error("SDK execution error:", error);
+    await flushMessages();
     throw new Error(`SDK execution error: ${error}`);
   }
 

@@ -2,6 +2,55 @@
 
 This document outlines the changes made to migrate from GitHub App authentication to pure GitHub Actions and add Gitea compatibility.
 
+## 2026-Q2: Unified run.ts entrypoint (drops `anthropics/claude-code-base-action@v0.0.63`)
+
+**Who needs to read this:** maintainers of Gitea workflows that pin a specific commit/tag of this action. Typical end-user workflows need **no changes** — the public input surface is preserved.
+
+### What changed
+
+Before:
+
+- `action.yml` ran a two-step pipeline:
+  1. `src/entrypoints/prepare.ts` — built context, fetched data, wrote prompt, emitted `mcp_config` as a step output.
+  2. `uses: anthropics/claude-code-base-action@v0.0.63` — external, frozen since Aug 2025, invoked Claude via CLI subprocess.
+
+After:
+
+- `action.yml` runs a single in-process orchestrator: `bun run src/entrypoints/run.ts`.
+- `run.ts` imports `./base-action/src/*` directly (no external action, no subprocess boundary).
+- Claude is invoked through the SDK wrapper (`runClaude` → `runClaudeWithSdk`).
+
+The external pin is gone. The local `./base-action/` directory — previously kept in sync with upstream but unused — is now the live execution path.
+
+### New inputs, now live
+
+These inputs existed in `action.yml` as stubs and were plumbed as env vars but never reached Claude. They are wired through the unified entrypoint:
+
+| Input                 | Purpose                                                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `show_full_output`    | Print the full JSON message stream from Claude. **WARNING**: exposes tool results (possibly secrets) in workflow logs. Use only for non-sensitive debugging. |
+| `plugins`             | Newline-separated list of Claude Code plugin names to install before running (`installPlugins`).                                                             |
+| `plugin_marketplaces` | Newline-separated list of plugin marketplace Git URLs.                                                                                                       |
+| `display_report`      | Render Claude's turns as a Step Summary at the end of the run. `"false"` suppresses. Default `"true"`.                                                       |
+
+### Input shape unchanged
+
+All previously-supported inputs continue to work with the same names: `max_turns`, `timeout_minutes`, `model`, `system_prompt`, `append_system_prompt`, `fallback_model`, `allowed_tools`, `disallowed_tools`, `mode`, `claude_env`, `use_bedrock`, `use_vertex`, `ssh_signing_key`, `bot_id`, `bot_name`, etc. No `claude_args`-style migration is required.
+
+### Behavior subtleties
+
+- **Agent mode trigger source:** agent mode fires when `direct_prompt` or `override_prompt` is set (matching what `createAgentPrompt` actually consumes). The `prompt` input alone does **not** trigger agent mode on Gitea. Users who set `mode: agent` without one of those will see "No trigger found, skipping remaining steps" — use `direct_prompt` instead.
+- **timeout_minutes:** honored via a `Promise.race` deadline in `run.ts`. The SDK path has no native per-invocation timeout; this shim preserves the published semantics.
+- **execution_file on failure:** the SDK wrapper throws on non-success results after writing the execution log. `run.ts` captures the known `${RUNNER_TEMP}/claude-execution-output.json` path on catch so `update-comment-link` and the step-summary still see the debug log.
+- **Cloud provider flags:** `use_bedrock: true` / `use_vertex: true` now export `CLAUDE_CODE_USE_BEDROCK=1` / `CLAUDE_CODE_USE_VERTEX=1` (the names `validateEnvironmentVariables` keys off). Workflows relying on this without an Anthropic key now pass validation.
+- **Removed dead paths:** the old `Mode` object abstraction (`src/modes/registry.ts`, `src/modes/types.ts`, object-shaped `tagMode`/`agentMode`) is deleted. Tests that imported them (`test/modes/*.test.ts`) are removed; new coverage sits in `test/build-claude-args.test.ts` and the existing prepareMcpConfig + trigger tests.
+
+### If you vendored `src/entrypoints/prepare.ts`
+
+It's gone. Entity-context flow lives in `src/modes/tag/index.ts#prepareTagMode`. Automation/agent flow lives in `src/modes/agent/index.ts#prepareAgentMode`. Both are invoked from `src/entrypoints/run.ts`.
+
+---
+
 ## What Changed
 
 ### 1. Removed GitHub App Dependencies

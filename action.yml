@@ -178,13 +178,40 @@ inputs:
     required: false
     default: ""
 
+  # Activated by the local ./base-action switch (unified run.ts entrypoint).
+  show_full_output:
+    description: "Show full JSON output from Claude Code. WARNING: outputs ALL Claude messages including tool execution results which may contain secrets. Only enable for debugging in non-sensitive environments."
+    required: false
+    default: "false"
+  plugins:
+    description: "Newline-separated list of Claude Code plugin names to install (e.g. 'code-review@claude-code-plugins')."
+    required: false
+    default: ""
+  plugin_marketplaces:
+    description: "Newline-separated list of Claude Code plugin marketplace Git URLs to install from."
+    required: false
+    default: ""
+  display_report:
+    description: "Render Claude's execution turns as a Step Summary at the end of the run. Set 'false' to suppress."
+    required: false
+    default: "true"
+
 outputs:
   execution_file:
     description: "Path to the Claude Code execution output file"
-    value: ${{ steps.claude-code.outputs.execution_file }}
+    value: ${{ steps.run.outputs.execution_file }}
   branch_name:
     description: "The branch created by Claude Code for this execution"
-    value: ${{ steps.prepare.outputs.CLAUDE_BRANCH }}
+    value: ${{ steps.run.outputs.CLAUDE_BRANCH }}
+  conclusion:
+    description: "Execution status of Claude Code ('success' or 'failure')"
+    value: ${{ steps.run.outputs.conclusion }}
+  session_id:
+    description: "Claude Code session ID for --resume continuation"
+    value: ${{ steps.run.outputs.session_id }}
+  structured_output:
+    description: "JSON string containing all structured output fields when --json-schema is provided"
+    value: ${{ steps.run.outputs.structured_output }}
 
 runs:
   using: "composite"
@@ -203,7 +230,6 @@ runs:
         PATH_TO_BUN_EXECUTABLE: ${{ inputs.path_to_bun_executable }}
       run: |
         echo "Using custom Bun executable: $PATH_TO_BUN_EXECUTABLE"
-        # Add the directory containing the custom executable to PATH
         BUN_DIR=$(dirname "$PATH_TO_BUN_EXECUTABLE")
         echo "$BUN_DIR" >> "$GITHUB_PATH"
 
@@ -212,14 +238,16 @@ runs:
       run: |
         cd ${{ github.action_path }}
         bun install
+        cd base-action
+        bun install
 
     - name: Run Claude Code Action
-      id: prepare
+      id: run
       shell: bash
       run: |
-        bun run ${{ github.action_path }}/src/entrypoints/prepare.ts
+        bun run ${{ github.action_path }}/src/entrypoints/run.ts
       env:
-        # Prepare inputs
+        # --- prepare-phase inputs (consumed by parseGitHubContext / modes) ---
         MODE: ${{ inputs.mode }}
         TRIGGER_PHRASE: ${{ inputs.trigger_phrase }}
         ASSIGNEE_TRIGGER: ${{ inputs.assignee_trigger }}
@@ -245,85 +273,44 @@ runs:
         OVERRIDE_GITHUB_TOKEN: ${{ inputs.gitea_token }}
         GITHUB_TOKEN: ${{ github.token }}
         GITHUB_RUN_ID: ${{ github.run_id }}
-        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+        PATH_TO_CLAUDE_CODE_EXECUTABLE: ${{ inputs.path_to_claude_code_executable }}
 
-    - name: Install Claude
-      if: steps.prepare.outputs.contains_trigger == 'true'
-      shell: bash
-      run: |
-        # Install Claude Code if no custom executable is provided
-        if [ -z "${{ inputs.path_to_claude_code_executable }}" ]; then
-          echo "Installing Claude Code..."
-          curl -fsSL https://claude.ai/install.sh | bash -s 1.0.117
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-        else
-          echo "Using custom Claude Code executable: ${{ inputs.path_to_claude_code_executable }}"
-          # Add the directory containing the custom executable to PATH
-          CLAUDE_DIR=$(dirname "${{ inputs.path_to_claude_code_executable }}")
-          echo "$CLAUDE_DIR" >> "$GITHUB_PATH"
-        fi
-    # TODO pass claude_code_executable as input and use it here
-    - name: Run Claude Code
-      id: claude-code
-      if: steps.prepare.outputs.contains_trigger == 'true'
-      uses: anthropics/claude-code-base-action@e8132bc5e637a42c27763fc757faa37e1ee43b34 # v0.0.63
-      with:
-        prompt_file: /tmp/claude-prompts/claude-prompt.txt
-        allowed_tools: ${{ env.ALLOWED_TOOLS }}
-        disallowed_tools: ${{ env.DISALLOWED_TOOLS }}
-        max_turns: ${{ inputs.max_turns }}
-        timeout_minutes: ${{ inputs.timeout_minutes }}
-        model: ${{ inputs.model || inputs.anthropic_model }}
-        mcp_config: ${{ steps.prepare.outputs.mcp_config }}
-        use_bedrock: ${{ inputs.use_bedrock }}
-        use_vertex: ${{ inputs.use_vertex }}
-        anthropic_api_key: ${{ inputs.anthropic_api_key }}
-        claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
-        settings: ${{ inputs.settings }}
-        system_prompt: ${{ inputs.system_prompt }}
-        append_system_prompt: ${{ inputs.append_system_prompt }}
-        claude_env: ${{ inputs.claude_env }}
-        fallback_model: ${{ inputs.fallback_model }}
-        use_node_cache: ${{ inputs.use_node_cache }}
-      env:
-        # Core configuration
-        PROMPT_FILE: /tmp/claude-prompts/claude-prompt.txt
-        ALLOWED_TOOLS: ${{ env.ALLOWED_TOOLS }}
-        DISALLOWED_TOOLS: ${{ env.DISALLOWED_TOOLS }}
-        TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
-        MODEL: ${{ inputs.model || inputs.anthropic_model }}
-        ANTHROPIC_MODEL: ${{ inputs.model || inputs.anthropic_model }}
-        MCP_CONFIG: ${{ steps.prepare.outputs.mcp_config }}
-        USE_BEDROCK: ${{ inputs.use_bedrock }}
-        USE_VERTEX: ${{ inputs.use_vertex }}
+        # --- run-phase inputs (consumed by base-action code) ---
         ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
         CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude_code_oauth_token }}
-
-        # New settings support
-        SETTINGS: ${{ inputs.settings }}
+        ANTHROPIC_MODEL: ${{ inputs.model || inputs.anthropic_model }}
+        MODEL: ${{ inputs.model || inputs.anthropic_model }}
+        MAX_TURNS: ${{ inputs.max_turns }}
+        TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
         SYSTEM_PROMPT: ${{ inputs.system_prompt }}
         APPEND_SYSTEM_PROMPT: ${{ inputs.append_system_prompt }}
-        CLAUDE_ENV: ${{ inputs.claude_env }}
         FALLBACK_MODEL: ${{ inputs.fallback_model }}
+        CLAUDE_ENV: ${{ inputs.claude_env }}
+        # Base-action's validateEnvironmentVariables keys off the
+        # CLAUDE_CODE_USE_* vars, not the unprefixed names. Only set them when
+        # truthy; any non-empty value (even "false") flips the provider check.
+        CLAUDE_CODE_USE_BEDROCK: ${{ inputs.use_bedrock == 'true' && '1' || '' }}
+        CLAUDE_CODE_USE_VERTEX: ${{ inputs.use_vertex == 'true' && '1' || '' }}
         USE_NODE_CACHE: ${{ inputs.use_node_cache }}
 
-        # GitHub token for repository access
-        GITHUB_TOKEN: ${{ steps.prepare.outputs.GITHUB_TOKEN }}
+        # --- new local-base-action inputs (activated by this migration) ---
+        INPUT_SETTINGS: ${{ inputs.settings }}
+        INPUT_SHOW_FULL_OUTPUT: ${{ inputs.show_full_output }}
+        INPUT_PLUGINS: ${{ inputs.plugins }}
+        INPUT_PLUGIN_MARKETPLACES: ${{ inputs.plugin_marketplaces }}
+        INPUT_PATH_TO_CLAUDE_CODE_EXECUTABLE: ${{ inputs.path_to_claude_code_executable }}
+        DISPLAY_REPORT: ${{ inputs.display_report }}
 
-        # Git configuration
-        # bot_id + bot_name (when both set) override the git author strings
-        # with a noreply-format email that links commits back to the bot
-        # account in the Gitea/GitHub UI. prepare.ts computes these outputs
-        # only when both inputs are valid; fall back to claude_git_* otherwise.
-        CLAUDE_GIT_NAME: ${{ steps.prepare.outputs.effective_git_name || inputs.claude_git_name }}
-        CLAUDE_GIT_EMAIL: ${{ steps.prepare.outputs.effective_git_email || inputs.claude_git_email }}
+        # --- git config (used by configureGitAuth fallback) ---
+        CLAUDE_GIT_NAME: ${{ inputs.claude_git_name }}
+        CLAUDE_GIT_EMAIL: ${{ inputs.claude_git_email }}
 
-        # Provider configuration (for future cloud provider support)
-        ANTHROPIC_BASE_URL: ${{ env.ANTHROPIC_BASE_URL }}
+        # --- cloud provider passthrough (for future Bedrock/Vertex support) ---
         AWS_REGION: ${{ env.AWS_REGION }}
         AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
         AWS_SESSION_TOKEN: ${{ env.AWS_SESSION_TOKEN }}
+        ANTHROPIC_BASE_URL: ${{ env.ANTHROPIC_BASE_URL }}
         ANTHROPIC_BEDROCK_BASE_URL: ${{ env.ANTHROPIC_BEDROCK_BASE_URL }}
         ANTHROPIC_VERTEX_PROJECT_ID: ${{ env.ANTHROPIC_VERTEX_PROJECT_ID }}
         CLOUD_ML_REGION: ${{ env.CLOUD_ML_REGION }}
@@ -333,28 +320,7 @@ runs:
         VERTEX_REGION_CLAUDE_3_5_SONNET: ${{ env.VERTEX_REGION_CLAUDE_3_5_SONNET }}
         VERTEX_REGION_CLAUDE_3_7_SONNET: ${{ env.VERTEX_REGION_CLAUDE_3_7_SONNET }}
 
-    - name: Update comment with job link
-      if: steps.prepare.outputs.contains_trigger == 'true' && steps.prepare.outputs.claude_comment_id && always()
-      shell: bash
-      run: |
-        bun run ${{ github.action_path }}/src/entrypoints/update-comment-link.ts
-      env:
-        REPOSITORY: ${{ github.repository }}
-        PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
-        CLAUDE_COMMENT_ID: ${{ steps.prepare.outputs.claude_comment_id }}
-        GITHUB_RUN_ID: ${{ github.run_id }}
-        GITHUB_TOKEN: ${{ steps.prepare.outputs.GITHUB_TOKEN }}
-        GITHUB_EVENT_NAME: ${{ github.event_name }}
-        TRIGGER_COMMENT_ID: ${{ github.event.comment.id }}
-        CLAUDE_BRANCH: ${{ steps.prepare.outputs.CLAUDE_BRANCH }}
-        IS_PR: ${{ github.event.issue.pull_request != null || github.event_name == 'pull_request_review_comment' }}
-        BASE_BRANCH: ${{ steps.prepare.outputs.BASE_BRANCH }}
-        CLAUDE_SUCCESS: ${{ steps.claude-code.outputs.conclusion == 'success' }}
-        OUTPUT_FILE: ${{ steps.claude-code.outputs.execution_file || '' }}
-        TRIGGER_USERNAME: ${{ github.event.comment.user.login || github.event.issue.user.login || github.event.pull_request.user.login || github.event.sender.login || github.triggering_actor || github.actor || '' }}
-        PREPARE_SUCCESS: ${{ steps.prepare.outcome == 'success' }}
-        PREPARE_ERROR: ${{ steps.prepare.outputs.prepare_error || '' }}
-        # Telemetry configuration
+        # --- telemetry passthrough ---
         CLAUDE_CODE_ENABLE_TELEMETRY: ${{ env.CLAUDE_CODE_ENABLE_TELEMETRY }}
         OTEL_METRICS_EXPORTER: ${{ env.OTEL_METRICS_EXPORTER }}
         OTEL_LOGS_EXPORTER: ${{ env.OTEL_LOGS_EXPORTER }}
@@ -364,3 +330,25 @@ runs:
         OTEL_METRIC_EXPORT_INTERVAL: ${{ env.OTEL_METRIC_EXPORT_INTERVAL }}
         OTEL_LOGS_EXPORT_INTERVAL: ${{ env.OTEL_LOGS_EXPORT_INTERVAL }}
         OTEL_RESOURCE_ATTRIBUTES: ${{ env.OTEL_RESOURCE_ATTRIBUTES }}
+
+    - name: Update comment with job link
+      if: steps.run.outputs.contains_trigger == 'true' && steps.run.outputs.claude_comment_id && always()
+      shell: bash
+      run: |
+        bun run ${{ github.action_path }}/src/entrypoints/update-comment-link.ts
+      env:
+        REPOSITORY: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+        CLAUDE_COMMENT_ID: ${{ steps.run.outputs.claude_comment_id }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_TOKEN: ${{ steps.run.outputs.GITHUB_TOKEN }}
+        GITHUB_EVENT_NAME: ${{ github.event_name }}
+        TRIGGER_COMMENT_ID: ${{ github.event.comment.id }}
+        CLAUDE_BRANCH: ${{ steps.run.outputs.CLAUDE_BRANCH }}
+        IS_PR: ${{ github.event.issue.pull_request != null || github.event_name == 'pull_request_review_comment' }}
+        BASE_BRANCH: ${{ steps.run.outputs.BASE_BRANCH }}
+        CLAUDE_SUCCESS: ${{ steps.run.outputs.claude_success }}
+        OUTPUT_FILE: ${{ steps.run.outputs.execution_file || '' }}
+        TRIGGER_USERNAME: ${{ github.event.comment.user.login || github.event.issue.user.login || github.event.pull_request.user.login || github.event.sender.login || github.triggering_actor || github.actor || '' }}
+        PREPARE_SUCCESS: ${{ steps.run.outputs.prepare_success }}
+        PREPARE_ERROR: ${{ steps.run.outputs.prepare_error || '' }}

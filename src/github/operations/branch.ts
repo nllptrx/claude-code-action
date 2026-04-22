@@ -260,6 +260,8 @@ export async function setupBranch(
     };
   } catch (error) {
     console.error("Error setting up branch:", error);
-    process.exit(1);
+    // Re-throw instead of process.exit so the unified run.ts catch/finally
+    // can publish prepare_success=false + prepare_error for update-comment-link.
+    throw error;
   }
 }
