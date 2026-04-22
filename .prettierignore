@@ -1,2 +1,8 @@
 # Test fixtures should not be formatted to preserve exact output matching
 test/fixtures/
+
+# E2E harness scratch (ephemeral, gitignored under scripts/e2e-gitea/.gitignore)
+scripts/e2e-gitea/test-repo-workspace/
+scripts/e2e-gitea/gitea-data/
+scripts/e2e-gitea/runner-data/
+scripts/e2e-gitea/pr-workspace-*/

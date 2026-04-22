@@ -1,0 +1,9 @@
+.admin-token
+.claude-pat
+.bob-token
+.runner-token
+.env
+.env.runtime
+gitea-data/
+runner-data/
+test-repo-workspace/

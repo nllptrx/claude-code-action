@@ -1,0 +1,20 @@
+log:
+  level: info
+runner:
+  file: .runner
+  capacity: 1
+  timeout: 10m
+  # Labels describe runner capabilities. The "ubuntu-latest" label maps to
+  # the default container image the runner spawns for each job.
+  labels:
+    - "ubuntu-latest:docker://node:20-bookworm"
+    - "ubuntu-22.04:docker://node:20-bookworm"
+cache:
+  enabled: true
+container:
+  # Must match the docker network the compose stack creates, so spawned job
+  # containers can resolve the `gitea` hostname.
+  network: e2e-gitea_e2e
+  privileged: false
+host:
+  workdir_parent: /tmp/act-workdir

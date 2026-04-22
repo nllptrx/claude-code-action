@@ -1,0 +1,48 @@
+services:
+  gitea:
+    image: gitea/gitea:1.24.6
+    container_name: gitea-e2e
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__database__DB_TYPE=sqlite3
+      - GITEA__database__PATH=/data/gitea/gitea.db
+      - GITEA__server__ROOT_URL=http://gitea:3000/
+      - GITEA__server__DOMAIN=gitea
+      - GITEA__server__HTTP_PORT=3000
+      - GITEA__server__SSH_PORT=2222
+      - GITEA__server__SSH_LISTEN_PORT=2222
+      - GITEA__actions__ENABLED=true
+      - GITEA__security__INSTALL_LOCK=true
+      - GITEA__service__DISABLE_REGISTRATION=false
+      - GITEA__service__REQUIRE_SIGNIN_VIEW=false
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${GITEA_HTTP_PORT:-3030}:3000"
+      - "127.0.0.1:${GITEA_SSH_PORT:-2222}:2222"
+    volumes:
+      - ./gitea-data:/data
+    networks:
+      - e2e
+
+  runner:
+    image: gitea/act_runner:latest
+    container_name: gitea-runner-e2e
+    environment:
+      - CONFIG_FILE=/config.yaml
+      - GITEA_INSTANCE_URL=http://gitea:3000
+      - GITEA_RUNNER_REGISTRATION_TOKEN=${GITEA_RUNNER_REGISTRATION_TOKEN}
+    restart: unless-stopped
+    depends_on:
+      - gitea
+    volumes:
+      - ./runner-data:/data
+      - ./runner-config.yaml:/config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - e2e
+
+networks:
+  e2e:
+    name: e2e-gitea_e2e
+    driver: bridge

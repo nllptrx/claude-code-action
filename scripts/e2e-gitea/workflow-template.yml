@@ -1,0 +1,53 @@
+name: Claude Assistant (E2E)
+
+on:
+  issue_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned, labeled, edited]
+
+jobs:
+  claude:
+    # Guard against Claude's own tracking-comment updates re-triggering the
+    # workflow. Without this, every Claude-posted comment burns a runner slot
+    # on a no-op. Match the trigger detection the action itself performs.
+    if: |
+      (github.event_name == 'issues') ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '${TRIGGER_PHRASE}'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install jq
+        # The pinned claude-code-base-action@v0.0.63 shells out to `jq` to
+        # assemble the execution-output JSON. The node:20-bookworm job image
+        # doesn't include jq, so we install it here.
+        shell: bash
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            apt-get update -qq && apt-get install -y --no-install-recommends jq
+          fi
+
+      - name: Run Claude
+        uses: ${ACTION_USES}
+        with:
+          gitea_token: ${{ secrets.CLAUDE_PAT }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          timeout_minutes: "30"
+          trigger_phrase: "${TRIGGER_PHRASE}"
+          assignee_trigger: "${ASSIGNEE_TRIGGER}"
+          label_trigger: "${LABEL_TRIGGER}"
+          allowed_non_write_users: "${ALLOWED_NON_WRITE_USERS}"
+          bot_id: "${BOT_ID}"
+          bot_name: "${BOT_NAME}"
+          custom_instructions: |
+            E2E test run. When the issue body asks you to make changes
+            (create a file, edit a file, open a PR, submit a review, etc.),
+            do it. Otherwise acknowledge the trigger briefly and stop.
