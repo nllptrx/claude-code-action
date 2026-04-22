@@ -1,4 +1,6 @@
+import * as core from "@actions/core";
 import type { GitHubContext } from "../github/context";
+import { isEntityContext } from "../github/context";
 import { getServerUrl } from "../github/api/config";
 
 /**
@@ -14,6 +16,43 @@ function deriveApiUrlAtRuntime(): string {
   const serverUrl = getServerUrl();
   if (serverUrl.includes("github.com")) return "https://api.github.com";
   return `${serverUrl}/api/v1`;
+}
+
+/**
+ * Probe that the provided token has repo-read access to the Actions unit on
+ * Gitea by hitting `/actions/tasks` with limit=1. On success the token can
+ * list runs; on 403 the token lacks the Actions read permission (or the unit
+ * is disabled on the repo); on network/other errors we conservatively return
+ * false and let the caller skip server registration.
+ */
+async function checkGiteaActionsReadPermission(
+  token: string,
+  owner: string,
+  repo: string,
+  apiUrl: string,
+): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `${apiUrl}/repos/${owner}/${repo}/actions/tasks?limit=1`,
+      {
+        headers: {
+          Authorization: `token ${token}`,
+          Accept: "application/json",
+        },
+      },
+    );
+    if (res.ok) return true;
+    if (res.status === 403 || res.status === 404) return false;
+    core.debug(
+      `Unexpected status probing /actions/tasks: ${res.status} ${res.statusText}`,
+    );
+    return false;
+  } catch (error) {
+    core.debug(
+      `Failed to probe Gitea actions permission: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return false;
+  }
 }
 
 export type PrepareMcpConfigOptions = {
@@ -33,6 +72,7 @@ export async function prepareMcpConfig({
   owner,
   repo,
   branch,
+  context,
 }: PrepareMcpConfigOptions): Promise<string> {
   console.log("[MCP-INSTALL] Preparing MCP configuration...");
   console.log(`[MCP-INSTALL] Owner: ${owner}`);
@@ -49,7 +89,8 @@ export async function prepareMcpConfig({
   );
 
   try {
-    const mcpConfig = {
+    const apiUrl = deriveApiUrlAtRuntime();
+    const mcpConfig: { mcpServers: Record<string, unknown> } = {
       mcpServers: {
         gitea: {
           command: "bun",
@@ -63,7 +104,7 @@ export async function prepareMcpConfig({
             REPO_NAME: repo,
             BRANCH_NAME: branch,
             REPO_DIR: process.env.GITHUB_WORKSPACE || process.cwd(),
-            GITEA_API_URL: deriveApiUrlAtRuntime(),
+            GITEA_API_URL: apiUrl,
           },
         },
         local_git_ops: {
@@ -78,11 +119,61 @@ export async function prepareMcpConfig({
             REPO_NAME: repo,
             BRANCH_NAME: branch,
             REPO_DIR: process.env.GITHUB_WORKSPACE || process.cwd(),
-            GITEA_API_URL: deriveApiUrlAtRuntime(),
+            GITEA_API_URL: apiUrl,
           },
         },
       },
     };
+
+    // Conditionally register the gitea_actions MCP server when
+    // `additional_permissions: actions: read` is set on a PR context. Gitea-
+    // native server: hits `/actions/tasks` (not `/actions/runs`, which doesn't
+    // exist on Gitea 1.24). On github.com we skip registration with a warning
+    // — the server's endpoints don't have GitHub equivalents.
+    if (context && isEntityContext(context) && context.isPR) {
+      const wantsActionsRead =
+        context.inputs.additionalPermissions.get("actions") === "read";
+
+      if (wantsActionsRead) {
+        const isGitHub = apiUrl.includes("api.github.com");
+        if (isGitHub) {
+          core.warning(
+            "gitea_actions MCP server targets Gitea's /actions/tasks endpoint and is not wired for github.com. " +
+              "CI introspection tools will be unavailable on this run.",
+          );
+        } else {
+          const hasPermission = await checkGiteaActionsReadPermission(
+            githubToken,
+            owner,
+            repo,
+            apiUrl,
+          );
+          if (!hasPermission) {
+            core.warning(
+              "gitea_actions MCP server requires repo-read access with the Actions unit enabled. " +
+                "The probe to /actions/tasks failed. Verify token scope + repo Actions settings, " +
+                "or remove `additional_permissions: actions: read` from the workflow.",
+            );
+          } else {
+            mcpConfig.mcpServers.gitea_actions = {
+              command: "bun",
+              args: [
+                "run",
+                `${process.env.GITHUB_ACTION_PATH}/src/mcp/gitea-actions-server.ts`,
+              ],
+              env: {
+                GITHUB_TOKEN: githubToken,
+                REPO_OWNER: owner,
+                REPO_NAME: repo,
+                PR_NUMBER: context.entityNumber.toString(),
+                RUNNER_TEMP: process.env.RUNNER_TEMP || "/tmp",
+                GITEA_API_URL: apiUrl,
+              },
+            };
+          }
+        }
+      }
+    }
 
     const configString = JSON.stringify(mcpConfig, null, 2);
     console.log("[MCP-INSTALL] Generated MCP configuration:");

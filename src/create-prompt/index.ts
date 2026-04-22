@@ -65,9 +65,9 @@ const DISALLOWED_TOOLS = ["WebSearch", "WebFetch"];
 const USER_REQUEST_FILENAME = "claude-user-request.txt";
 
 const ACTIONS_ALLOWED_TOOLS = [
-  "mcp__github_actions__get_ci_status",
-  "mcp__github_actions__get_workflow_run_details",
-  "mcp__github_actions__download_job_log",
+  "mcp__gitea_actions__get_ci_status",
+  "mcp__gitea_actions__get_workflow_run_details",
+  "mcp__gitea_actions__download_job_log",
 ];
 
 const COMMIT_SIGNING_TOOLS = [

@@ -500,8 +500,9 @@ describe("buildAllowedToolsString", () => {
   test("should include actions tools when actions read permission granted", () => {
     const result = buildAllowedToolsString([], true, false);
 
-    expect(result).toContain("mcp__github_actions__get_ci_status");
-    expect(result).toContain("mcp__github_actions__download_job_log");
+    expect(result).toContain("mcp__gitea_actions__get_ci_status");
+    expect(result).toContain("mcp__gitea_actions__get_workflow_run_details");
+    expect(result).toContain("mcp__gitea_actions__download_job_log");
   });
 
   test("should append custom tools when provided", () => {
