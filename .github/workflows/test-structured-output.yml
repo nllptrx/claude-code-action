@@ -2,8 +2,18 @@ name: Test Structured Outputs
 
 on:
   pull_request:
+    paths:
+      - "base-action/**"
+      - ".github/workflows/test-structured-output.yml"
+      - "package.json"
+      - "bun.lock"
+      - "tsconfig.json"
   workflow_dispatch:
   workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

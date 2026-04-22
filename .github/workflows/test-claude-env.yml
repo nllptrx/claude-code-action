@@ -4,8 +4,24 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "base-action/**"
+      - ".github/workflows/test-claude-env.yml"
+      - "package.json"
+      - "bun.lock"
+      - "tsconfig.json"
   pull_request:
+    paths:
+      - "base-action/**"
+      - ".github/workflows/test-claude-env.yml"
+      - "package.json"
+      - "bun.lock"
+      - "tsconfig.json"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test-claude-env-with-comments:

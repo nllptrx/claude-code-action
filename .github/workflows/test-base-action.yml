@@ -2,6 +2,12 @@ name: Test Claude Code Action
 
 on:
   pull_request:
+    paths:
+      - "base-action/**"
+      - ".github/workflows/test-base-action.yml"
+      - "package.json"
+      - "bun.lock"
+      - "tsconfig.json"
   workflow_dispatch:
     inputs:
       test_prompt:
@@ -9,6 +15,10 @@ on:
         required: false
         default: "List the files in the current directory starting with 'package'"
   workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test-inline-prompt:

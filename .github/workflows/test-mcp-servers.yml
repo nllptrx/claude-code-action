@@ -2,8 +2,18 @@ name: Test MCP Servers
 
 on:
   pull_request:
+    paths:
+      - "base-action/**"
+      - ".github/workflows/test-mcp-servers.yml"
+      - "package.json"
+      - "bun.lock"
+      - "tsconfig.json"
   workflow_dispatch:
   workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test-mcp-integration:

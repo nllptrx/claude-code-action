@@ -2,8 +2,18 @@ name: Test Custom Executables
 
 on:
   pull_request:
+    paths:
+      - "base-action/**"
+      - ".github/workflows/test-custom-executables.yml"
+      - "package.json"
+      - "bun.lock"
+      - "tsconfig.json"
   workflow_dispatch:
   workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test-custom-executables:
