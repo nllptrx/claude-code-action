@@ -73,12 +73,17 @@ async function run() {
     const botId = context.inputs.botId?.trim() ?? "";
     const botName = context.inputs.botName?.trim() ?? "";
     if (botId && botName && /^\d+$/.test(botId)) {
-      const serverUrl = process.env.GITEA_SERVER_URL || "https://github.com";
+      // Use the canonical Gitea-aware server URL resolver (prefers
+      // GITEA_SERVER_URL, falls back to GITHUB_SERVER_URL, then github.com).
+      // Gitea Actions only exposes GITHUB_SERVER_URL to the runner env, so
+      // directly reading GITEA_SERVER_URL here would often miss the real
+      // hostname and produce github.com noreply emails on Gitea deployments.
+      const { GITEA_SERVER_URL } = await import("../github/api/config");
       let hostname = "github.com";
       try {
-        hostname = new URL(serverUrl).hostname;
+        hostname = new URL(GITEA_SERVER_URL).hostname;
       } catch {
-        // Fall back to github.com if GITEA_SERVER_URL isn't a valid URL.
+        // Fall back to github.com if the URL isn't parseable.
       }
       const noreplyDomain =
         hostname === "github.com"
