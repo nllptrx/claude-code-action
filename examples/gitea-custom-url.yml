@@ -7,6 +7,11 @@ on:
 
 jobs:
   claude-review:
+    # Skip runs where the comment/review doesn't mention @claude — otherwise
+    # every Claude-posted update would re-fire this workflow (comment-echo loop).
+    if: |
+      (github.event_name == 'pull_request') ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude'))
     runs-on: ubuntu-latest
     steps:
       - name: Claude Code Analysis

@@ -197,7 +197,7 @@ describe("checkContainsTrigger", () => {
             },
           },
         },
-      } as ParsedGitHubContext;
+      } as unknown as ParsedGitHubContext;
 
       expect(checkContainsTrigger(context)).toBe(false);
     });
@@ -219,7 +219,7 @@ describe("checkContainsTrigger", () => {
             name: "bug",
           },
         },
-      } as ParsedGitHubContext;
+      } as unknown as ParsedGitHubContext;
       expect(checkContainsTrigger(context)).toBe(false);
     });
 
@@ -231,7 +231,61 @@ describe("checkContainsTrigger", () => {
           ...mockIssueLabeledContext.payload,
           action: "opened",
         },
-      } as ParsedGitHubContext;
+      } as unknown as ParsedGitHubContext;
+      expect(checkContainsTrigger(context)).toBe(false);
+    });
+
+    // Gitea emits "label_updated" (covers add + remove) instead of the
+    // GitHub-style "labeled" / "unlabeled" split. Verified in E2E against
+    // Gitea 1.24.6 — action-name drift here silently broke label triggers.
+    // Both naming schemes must match so a future Gitea rename is caught in CI.
+    it("accepts Gitea's label_updated event name (parity with labeled)", () => {
+      const context = {
+        ...mockIssueLabeledContext,
+        eventAction: "label_updated",
+        payload: {
+          ...mockIssueLabeledContext.payload,
+          action: "label_updated",
+        },
+      } as unknown as unknown as ParsedGitHubContext;
+      expect(checkContainsTrigger(context)).toBe(true);
+    });
+
+    // Gitea's label_updated payload doesn't reliably set the single
+    // `payload.label` field (unlike GitHub's `labeled`). Fall back to
+    // scanning `payload.issue.labels[]` — this path also works for GitHub
+    // because GitHub populates both fields.
+    it("matches via issue.labels[] when single payload.label is absent", () => {
+      const context = {
+        ...mockIssueLabeledContext,
+        eventAction: "label_updated",
+        payload: {
+          ...mockIssueLabeledContext.payload,
+          action: "label_updated",
+          label: undefined,
+          issue: {
+            ...(mockIssueLabeledContext.payload as any).issue,
+            labels: [{ name: "unrelated" }, { name: "claude-task" }],
+          },
+        },
+      } as unknown as ParsedGitHubContext;
+      expect(checkContainsTrigger(context)).toBe(true);
+    });
+
+    it("issue.labels[] fallback still rejects when trigger label is absent", () => {
+      const context = {
+        ...mockIssueLabeledContext,
+        eventAction: "label_updated",
+        payload: {
+          ...mockIssueLabeledContext.payload,
+          action: "label_updated",
+          label: undefined,
+          issue: {
+            ...(mockIssueLabeledContext.payload as any).issue,
+            labels: [{ name: "bug" }, { name: "question" }],
+          },
+        },
+      } as unknown as ParsedGitHubContext;
       expect(checkContainsTrigger(context)).toBe(false);
     });
   });
@@ -253,7 +307,7 @@ describe("checkContainsTrigger", () => {
             body: "The login page is broken",
           },
         },
-      } as ParsedGitHubContext;
+      } as unknown as ParsedGitHubContext;
       expect(checkContainsTrigger(context)).toBe(true);
     });
 
@@ -289,7 +343,7 @@ describe("checkContainsTrigger", () => {
               body: issueBody,
             },
           },
-        } as ParsedGitHubContext;
+        } as unknown as ParsedGitHubContext;
         expect(checkContainsTrigger(context)).toBe(expected);
       });
     });
@@ -304,7 +358,7 @@ describe("checkContainsTrigger", () => {
             body: "claudette helped me with this",
           },
         },
-      } as ParsedGitHubContext;
+      } as unknown as ParsedGitHubContext;
       expect(checkContainsTrigger(context)).toBe(false);
     });
 
@@ -336,7 +390,7 @@ describe("checkContainsTrigger", () => {
               body: "No trigger in body",
             },
           },
-        } as ParsedGitHubContext;
+        } as unknown as ParsedGitHubContext;
         expect(checkContainsTrigger(context)).toBe(expected);
       });
     });
@@ -799,7 +853,7 @@ describe("comment trigger", () => {
         ...mockPullRequestReviewContext.payload,
         action: "edited",
       },
-    } as ParsedGitHubContext;
+    } as unknown as ParsedGitHubContext;
     expect(checkContainsTrigger(context)).toBe(true);
   });
 
@@ -816,7 +870,7 @@ describe("comment trigger", () => {
           body: "/claude please review this PR",
         },
       },
-    } as ParsedGitHubContext;
+    } as unknown as ParsedGitHubContext;
     expect(checkContainsTrigger(context)).toBe(false);
   });
 
@@ -847,7 +901,7 @@ describe("comment trigger", () => {
             body: commentBody,
           },
         },
-      } as ParsedGitHubContext;
+      } as unknown as ParsedGitHubContext;
       expect(checkContainsTrigger(context)).toBe(expected);
     });
   });
@@ -879,7 +933,7 @@ describe("comment trigger", () => {
             body: commentBody,
           },
         },
-      } as ParsedGitHubContext;
+      } as unknown as ParsedGitHubContext;
       expect(checkContainsTrigger(context)).toBe(expected);
     });
   });
