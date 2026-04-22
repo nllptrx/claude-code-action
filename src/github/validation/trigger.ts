@@ -41,26 +41,45 @@ export function checkContainsTrigger(context: GitHubContext): boolean {
     }
   }
 
-  // Check for issue label trigger
-  if (isIssuesEvent(context) && context.eventAction === "labeled") {
+  // Check for issue label trigger.
+  // GitHub emits eventAction="labeled" with payload.label set.
+  // Gitea emits eventAction="label_updated" (covers add + remove); the
+  // single-label field isn't reliably present. In both cases the issue's
+  // full labels array is populated on the payload, so match against that.
+  if (
+    isIssuesEvent(context) &&
+    (context.eventAction === "labeled" ||
+      context.eventAction === "label_updated")
+  ) {
     const triggerLabel = context.inputs.labelTrigger?.trim();
     const appliedLabel = (
       context.payload as IssuesLabeledEvent
     ).label?.name?.trim();
+    const allLabelNames = (
+      (context.payload.issue as unknown as { labels?: { name?: string }[] })
+        ?.labels ?? []
+    )
+      .map((l) => l?.name?.trim())
+      .filter((n): n is string => !!n);
 
     console.log(
-      `Checking label trigger: expected='${triggerLabel}', applied='${appliedLabel}'`,
+      `Checking label trigger: expected='${triggerLabel}', applied='${appliedLabel ?? "(none)"}', all=[${allLabelNames.join(",")}]`,
     );
 
-    if (
-      triggerLabel &&
-      appliedLabel &&
-      triggerLabel.localeCompare(appliedLabel, undefined, {
-        sensitivity: "accent",
-      }) === 0
-    ) {
-      console.log(`Issue labeled with trigger label '${triggerLabel}'`);
-      return true;
+    const caseInsensitiveMatch = (a: string, b: string) =>
+      a.localeCompare(b, undefined, { sensitivity: "accent" }) === 0;
+
+    if (triggerLabel) {
+      if (appliedLabel && caseInsensitiveMatch(triggerLabel, appliedLabel)) {
+        console.log(`Issue labeled with trigger label '${triggerLabel}'`);
+        return true;
+      }
+      if (allLabelNames.some((n) => caseInsensitiveMatch(triggerLabel, n))) {
+        console.log(
+          `Issue carries trigger label '${triggerLabel}' (matched via issue.labels)`,
+        );
+        return true;
+      }
     }
   }
 
