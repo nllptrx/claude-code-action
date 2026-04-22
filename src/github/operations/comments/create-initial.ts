@@ -107,19 +107,15 @@ export async function createInitialComment(
       throw new Error("Failed to obtain tracking comment id");
     }
 
-    // PATCH the body to the fresh working state. PR review comments and
-    // issue comments are SEPARATE ID namespaces in Gitea/GitHub, so route
-    // the PATCH through the matching endpoint — otherwise the PATCH 404s
-    // and the tracking comment is stuck on PREVIEW_PLACEHOLDER.
-    if (isPullRequestReviewCommentEvent(context)) {
-      await api.customRequest(
-        "PATCH",
-        `/repos/${owner}/${repo}/pulls/comments/${commentId}`,
-        { body: workingBody },
-      );
-    } else {
-      await api.updateIssueComment(owner, repo, commentId, workingBody);
-    }
+    // PATCH the body to the fresh working state. Unlike GitHub, Gitea's
+    // REST API stores PR review comments and issue comments in the same
+    // table (issues_model.Comment with CommentTypeCode discriminator) and
+    // exposes only ONE edit endpoint — PATCH /repos/{o}/{r}/issues/comments/{id} —
+    // which works for both kinds. The parallel /pulls/comments/{id} PATCH
+    // does NOT exist in Gitea (only /resolve and /unresolve POST routes
+    // live there). So a single updateIssueComment call is correct.
+    // Verified: https://deepwiki.com/go-gitea/gitea search "pulls/comments PATCH".
+    await api.updateIssueComment(owner, repo, commentId, workingBody);
 
     // Output the comment ID for downstream steps using GITHUB_OUTPUT
     const githubOutput = process.env.GITHUB_OUTPUT!;
