@@ -337,9 +337,33 @@ async function run() {
     // update-comment-link + the step summary rely on BEFORE exiting:
     // conclusion, execution_file (SDK wrote it on its way to the timeout),
     // branch_name, claude_success, prepare_success.
-    const timeoutMinutes = parseInt(process.env.TIMEOUT_MINUTES ?? "", 10);
+    // Validate timeout_minutes and max_turns strictly. An empty value means
+    // "use runner default" and is allowed; anything else must parse to a
+    // positive integer. Silent coercion to NaN-as-disabled used to let
+    // misconfigured workflows run unbounded.
+    const timeoutMinutesRaw = process.env.TIMEOUT_MINUTES ?? "";
+    let timeoutMinutes = 0;
+    if (timeoutMinutesRaw.trim() !== "") {
+      const parsed = parseInt(timeoutMinutesRaw, 10);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        throw new Error(
+          `timeout_minutes must be a positive integer, got: '${timeoutMinutesRaw}'`,
+        );
+      }
+      timeoutMinutes = parsed;
+    }
+    const maxTurnsRaw = process.env.MAX_TURNS ?? "";
+    if (maxTurnsRaw.trim() !== "") {
+      const parsed = parseInt(maxTurnsRaw, 10);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        throw new Error(
+          `max_turns must be a positive integer, got: '${maxTurnsRaw}'`,
+        );
+      }
+    }
+
     let timeoutHandle: NodeJS.Timeout | undefined;
-    if (Number.isFinite(timeoutMinutes) && timeoutMinutes > 0) {
+    if (timeoutMinutes > 0) {
       timeoutHandle = setTimeout(
         () => {
           core.setFailed(
