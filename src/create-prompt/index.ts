@@ -19,7 +19,6 @@ import {
 } from "../github/context";
 import type { GitHubContext, ParsedGitHubContext } from "../github/context";
 import type { CommonFields, PreparedContext, EventData } from "./types";
-import type { Mode, ModeContext } from "../modes/types";
 import { getServerUrl } from "../github/api/config";
 export type { CommonFields, PreparedContext } from "./types";
 
@@ -917,7 +916,7 @@ function extractUserRequestFromContext(
   return null;
 }
 
-async function createAgentPrompt(
+export async function createAgentPrompt(
   githubData: FetchDataResult | undefined,
   context: GitHubContext,
 ) {
@@ -959,87 +958,69 @@ async function createAgentPrompt(
   await writeFile(`${promptDir}/claude-prompt.txt`, promptContent);
 }
 
-function configureTools(mode: Mode, context: GitHubContext) {
+export function configureTools(context: GitHubContext) {
   const isPR = "isPR" in context ? context.isPR : false;
   const hasActionsReadPermission =
     context.inputs.additionalPermissions.get("actions") === "read" && isPR;
 
-  const modeAllowedTools = mode.getAllowedTools();
-  const modeDisallowedTools = mode.getDisallowedTools();
-
-  const combinedAllowedTools = [
-    ...context.inputs.allowedTools,
-    ...modeAllowedTools,
-  ];
-  const combinedDisallowedTools = [
-    ...context.inputs.disallowedTools,
-    ...modeDisallowedTools,
-  ];
-
   const allAllowedTools = buildAllowedToolsString(
-    combinedAllowedTools,
+    context.inputs.allowedTools,
     hasActionsReadPermission,
     context.inputs.useCommitSigning,
   );
   const allDisallowedTools = buildDisallowedToolsString(
-    combinedDisallowedTools,
-    combinedAllowedTools,
+    context.inputs.disallowedTools,
+    context.inputs.allowedTools,
   );
 
   core.exportVariable("ALLOWED_TOOLS", allAllowedTools);
   core.exportVariable("DISALLOWED_TOOLS", allDisallowedTools);
+
+  return { allowedTools: allAllowedTools, disallowedTools: allDisallowedTools };
 }
 
 export async function createPrompt(
-  mode: Mode,
-  modeContext: ModeContext,
-  githubData: FetchDataResult | undefined,
-  context: GitHubContext,
+  commentId: number,
+  baseBranch: string | undefined,
+  claudeBranch: string | undefined,
+  githubData: FetchDataResult,
+  context: ParsedGitHubContext,
 ) {
   try {
-    if (mode.name === "agent") {
-      await createAgentPrompt(githubData, context);
-    } else {
-      if (!modeContext.commentId) {
-        throw new Error("Tag mode requires a comment ID for prompt generation");
-      }
+    const preparedContext = prepareContext(
+      context,
+      commentId.toString(),
+      baseBranch,
+      claudeBranch,
+    );
 
-      const entityContext = context as ParsedGitHubContext;
-      const preparedContext = prepareContext(
-        entityContext,
-        modeContext.commentId.toString(),
-        modeContext.baseBranch,
-        modeContext.claudeBranch,
-      );
+    const promptDir = `${process.env.RUNNER_TEMP || "/tmp"}/claude-prompts`;
+    await mkdir(promptDir, { recursive: true });
 
-      const promptDir = `${process.env.RUNNER_TEMP || "/tmp"}/claude-prompts`;
-      await mkdir(promptDir, { recursive: true });
+    const promptContent = generatePrompt(
+      preparedContext,
+      githubData,
+      context.inputs.useCommitSigning,
+    );
 
-      const promptContent = generatePrompt(
-        preparedContext,
-        githubData!,
-        entityContext.inputs.useCommitSigning,
-      );
+    console.log("===== FINAL PROMPT =====");
+    console.log(promptContent);
+    console.log("=======================");
 
-      console.log("===== FINAL PROMPT =====");
-      console.log(promptContent);
-      console.log("=======================");
+    await writeFile(`${promptDir}/claude-prompt.txt`, promptContent);
 
-      await writeFile(`${promptDir}/claude-prompt.txt`, promptContent);
-
-      const userRequest = extractUserRequestFromContext(
-        preparedContext,
-        githubData!,
-      );
-      if (userRequest) {
-        await writeFile(`${promptDir}/${USER_REQUEST_FILENAME}`, userRequest);
-        console.log("===== USER REQUEST =====");
-        console.log(userRequest);
-        console.log("========================");
-      }
+    const userRequest = extractUserRequestFromContext(
+      preparedContext,
+      githubData,
+    );
+    if (userRequest) {
+      await writeFile(`${promptDir}/${USER_REQUEST_FILENAME}`, userRequest);
+      console.log("===== USER REQUEST =====");
+      console.log(userRequest);
+      console.log("========================");
     }
 
-    configureTools(mode, context);
+    configureTools(context);
   } catch (error) {
     core.setFailed(`Create prompt failed with error: ${error}`);
     process.exit(1);

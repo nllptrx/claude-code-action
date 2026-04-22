@@ -25,6 +25,6 @@
     "noUnusedParameters": true,
     "noPropertyAccessFromIndexSignature": false
   },
-  "include": ["src/**/*", "test/**/*"],
-  "exclude": ["node_modules", "src/entrypoints/run.ts", "base-action/**/*"]
+  "include": ["src/**/*", "base-action/src/**/*", "test/**/*"],
+  "exclude": ["node_modules", "base-action/node_modules"]
 }

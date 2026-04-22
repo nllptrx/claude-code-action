@@ -9,7 +9,7 @@ import { $ } from "bun";
 import { join } from "path";
 import { homedir } from "os";
 import { mkdir, writeFile, rm } from "fs/promises";
-import type { ParsedGitHubContext } from "../context";
+import type { GitHubContext } from "../context";
 import { GITEA_SERVER_URL } from "../api/config";
 
 const SSH_SIGNING_KEY_PATH = join(homedir(), ".ssh", "claude_signing_key");
@@ -29,7 +29,7 @@ type GitUser = {
  *   const user = { login: context.inputs.botName, id: parseInt(context.inputs.botId) };
  */
 export function getBotUserFromInputs(
-  context: ParsedGitHubContext,
+  context: GitHubContext,
 ): GitUser | null {
   const botName = context.inputs.botName?.trim();
   const botId = context.inputs.botId?.trim();
@@ -41,7 +41,7 @@ export function getBotUserFromInputs(
 
 export async function configureGitAuth(
   githubToken: string,
-  context: ParsedGitHubContext,
+  context: GitHubContext,
   user: GitUser | null,
 ) {
   console.log("Configuring git authentication for non-signing mode");

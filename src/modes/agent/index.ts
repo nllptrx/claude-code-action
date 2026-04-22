@@ -1,42 +1,75 @@
-import type { Mode } from "../types";
+import { prepareMcpConfig } from "../../mcp/install-mcp-server";
+import {
+  configureGitAuth,
+  setupSshSigning,
+} from "../../github/operations/git-config";
+import { checkHumanActor } from "../../github/validation/actor";
+import { createAgentPrompt, configureTools } from "../../create-prompt";
+import type { GitHubContext } from "../../github/context";
+import type { GitHubClient } from "../../github/api/client";
 
 /**
- * Agent mode implementation.
+ * Prepares the agent mode execution context.
  *
- * This mode is designed for automation and workflow_dispatch scenarios.
- * It always triggers (no checking), allows highly flexible configurations,
- * and works well with override_prompt for custom workflows.
- *
- * In the future, this mode could restrict certain tools for safety in automation contexts,
- * e.g., disallowing WebSearch or limiting file system operations.
+ * Agent mode runs whenever an explicit prompt is provided in the workflow
+ * configuration. It bypasses the @claude mention checking and tracking-comment
+ * flow used by tag mode, providing direct Claude Code execution for automation
+ * workflows.
  */
-export const agentMode: Mode = {
-  name: "agent",
-  description: "Automation mode that always runs without trigger checking",
+export async function prepareAgentMode({
+  context,
+  client,
+  githubToken,
+}: {
+  context: GitHubContext;
+  client: GitHubClient;
+  githubToken: string;
+}) {
+  await checkHumanActor(client.api, context);
 
-  shouldTrigger() {
-    return true;
-  },
+  // SSH signing takes precedence when set. API commit signing is upstream-
+  // only (relies on GitHub file_ops MCP); on Gitea we fall through to plain
+  // git CLI auth in that branch too.
+  if (context.inputs.sshSigningKey) {
+    await setupSshSigning(context.inputs.sshSigningKey);
+  }
 
-  prepareContext(context, data) {
-    return {
-      mode: "agent",
-      githubContext: context,
-      commentId: data?.commentId,
-      baseBranch: data?.baseBranch,
-      claudeBranch: data?.claudeBranch,
-    };
-  },
+  try {
+    await configureGitAuth(githubToken, context, null);
+  } catch (error) {
+    console.error("Failed to configure git authentication:", error);
+    // Continue anyway — git operations may still work with default config
+  }
 
-  getAllowedTools() {
-    return [];
-  },
+  await createAgentPrompt(undefined, context);
+  configureTools(context);
 
-  getDisallowedTools() {
-    return [];
-  },
+  const claudeBranch = process.env.CLAUDE_BRANCH || undefined;
+  const defaultBranch = context.repository.default_branch || "main";
+  const baseBranch = context.inputs.baseBranch || defaultBranch;
+  const currentBranch =
+    claudeBranch ||
+    process.env.GITHUB_HEAD_REF ||
+    process.env.GITHUB_REF_NAME ||
+    defaultBranch;
 
-  shouldCreateTrackingComment() {
-    return false;
-  },
-};
+  const mcpConfig = await prepareMcpConfig({
+    githubToken,
+    owner: context.repository.owner,
+    repo: context.repository.repo,
+    branch: currentBranch,
+    baseBranch,
+    allowedTools: context.inputs.allowedTools,
+    context,
+  });
+
+  return {
+    commentId: undefined as number | undefined,
+    branchInfo: {
+      baseBranch,
+      currentBranch: baseBranch,
+      claudeBranch,
+    },
+    mcpConfig,
+  };
+}

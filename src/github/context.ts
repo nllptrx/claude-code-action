@@ -8,8 +8,12 @@ import type {
   PullRequestReviewCommentEvent,
   WorkflowRunEvent,
 } from "@octokit/webhooks-types";
-import type { ModeName } from "../modes/types";
-import { DEFAULT_MODE, isValidMode } from "../modes/registry";
+export type ModeName = "tag" | "agent";
+const DEFAULT_MODE: ModeName = "tag";
+const VALID_MODES: readonly ModeName[] = ["tag", "agent"] as const;
+function isValidMode(value: string): value is ModeName {
+  return (VALID_MODES as readonly string[]).includes(value);
+}
 
 type CommonInputs = {
   mode: ModeName;
