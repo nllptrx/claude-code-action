@@ -139,7 +139,7 @@ describe("checkWritePermissions", () => {
       warnSpy.mockRestore();
     });
 
-    test("falls back to getRepo when collaborator endpoint throws", async () => {
+    test("falls back to getRepo when collaborator endpoint throws (non-403)", async () => {
       const mockApi = {
         getCollaboratorPermission: async () => {
           throw new Error("404 Not Found");
@@ -150,6 +150,31 @@ describe("checkWritePermissions", () => {
       } as any;
       const result = await checkWritePermissions(mockApi, baseContext);
       expect(result).toBe(true);
+    });
+
+    test("fails CLOSED on Gitea 403 'query only their own' (prevents workflow-token leak)", async () => {
+      // Gitea returns this specific 403 when the workflow token can't look up
+      // the actor's permissions. Falling back to the token's repo.permissions
+      // would incorrectly grant write to anyone (the workflow token has push).
+      // Must return false so only allowed_non_write_users can grant access.
+      const warnSpy = spyOn(core, "warning").mockImplementation(() => {});
+      const err: any = new Error(
+        "HTTP 403: Only admins can query all permissions, repo admins can query all repo permissions, collaborators can query only their own",
+      );
+      err.status = 403;
+      const mockApi = {
+        getCollaboratorPermission: async () => {
+          throw err;
+        },
+        getRepo: async () => ({
+          // Even if getRepo would grant (workflow-token push), we must NOT
+          // consult it on this specific 403.
+          data: { permissions: { admin: false, push: true, pull: true } },
+        }),
+      } as any;
+      const result = await checkWritePermissions(mockApi, baseContext);
+      expect(result).toBe(false);
+      warnSpy.mockRestore();
     });
   });
 

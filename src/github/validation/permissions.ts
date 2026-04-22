@@ -91,10 +91,34 @@ export async function checkWritePermissions(
     }
     core.warning(`Actor ${actor} lacks write access: ${level}`);
     return false;
-  } catch (collaboratorError) {
-    // Fallback: older Gitea or tokens without collaborator:read — use the
-    // token's own repo permissions. Matches pre-port behavior so existing
-    // deployments don't regress.
+  } catch (collaboratorError: any) {
+    const status = collaboratorError?.status;
+    const msg = String(collaboratorError?.message ?? "");
+
+    // Gitea returns 403 with this exact error message ("collaborators can query
+    // only their own") when the workflow token lacks permission to look up the
+    // actor. On Gitea the workflow token isn't a repo admin, so this fires for
+    // every non-owner non-collaborator actor. Falling back to the token's own
+    // repo.permissions in this case is unsafe — workflow tokens always have
+    // push, which would effectively grant write to anyone who can trigger the
+    // workflow. Fail closed.
+    if (
+      status === 403 &&
+      /query only their own|can query all permissions/.test(msg)
+    ) {
+      core.warning(
+        `Actor ${actor} is not a repository collaborator (Gitea's permission ` +
+          `endpoint rejected the lookup with 403). Denying write access. ` +
+          `To allow this actor, add them to the repo's collaborators list, or ` +
+          `grant an explicit bypass via the allowed_non_write_users input.`,
+      );
+      return false;
+    }
+
+    // Other errors (connection issues, missing endpoint on older Gitea, etc.)
+    // — fall back to the token's repo.permissions so those legacy deployments
+    // don't regress. A broken endpoint is less dangerous than a connection
+    // failure masquerading as "no access".
     core.info(
       `Collaborator permission endpoint failed for ${actor} (${collaboratorError}); ` +
         `falling back to workflow token's repo.permissions.`,
