@@ -125,7 +125,7 @@ export async function prepareAgentMode({
     commentId: undefined as number | undefined,
     branchInfo: {
       baseBranch,
-      currentBranch: baseBranch,
+      currentBranch,
       claudeBranch,
     },
     mcpConfig,

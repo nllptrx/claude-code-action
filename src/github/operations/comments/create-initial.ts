@@ -107,9 +107,19 @@ export async function createInitialComment(
       throw new Error("Failed to obtain tracking comment id");
     }
 
-    // Always PATCH the body to the fresh working state — covers both
-    // newly-created comments and reused prior ones.
-    await api.updateIssueComment(owner, repo, commentId, workingBody);
+    // PATCH the body to the fresh working state. PR review comments and
+    // issue comments are SEPARATE ID namespaces in Gitea/GitHub, so route
+    // the PATCH through the matching endpoint — otherwise the PATCH 404s
+    // and the tracking comment is stuck on PREVIEW_PLACEHOLDER.
+    if (isPullRequestReviewCommentEvent(context)) {
+      await api.customRequest(
+        "PATCH",
+        `/repos/${owner}/${repo}/pulls/comments/${commentId}`,
+        { body: workingBody },
+      );
+    } else {
+      await api.updateIssueComment(owner, repo, commentId, workingBody);
+    }
 
     // Output the comment ID for downstream steps using GITHUB_OUTPUT
     const githubOutput = process.env.GITHUB_OUTPUT!;

@@ -25,26 +25,15 @@ export function collectActionInputsPresence(): string {
     ssh_signing_key: "",
   };
 
-  const allInputsJson = process.env.ALL_INPUTS;
-  if (!allInputsJson) {
-    console.log("ALL_INPUTS environment variable not found");
-    return JSON.stringify({});
-  }
-
-  let allInputs: Record<string, string>;
-  try {
-    allInputs = JSON.parse(allInputsJson);
-  } catch (e) {
-    console.error("Failed to parse ALL_INPUTS JSON:", e);
-    return JSON.stringify({});
-  }
-
+  // GitHub Actions exposes each input as INPUT_<NAME_IN_UPPER_SNAKE_CASE>
+  // automatically. Read them directly — the old path required action.yml
+  // to JSON-encode every input into an ALL_INPUTS env var, which it never
+  // did, so this function used to always return {} in production runs.
   const presentInputs: Record<string, boolean> = {};
-
   for (const [name, defaultValue] of Object.entries(inputDefaults)) {
-    const actualValue = allInputs[name] || "";
+    const envName = `INPUT_${name.replace(/-/g, "_").toUpperCase()}`;
+    const actualValue = process.env[envName] ?? "";
     presentInputs[name] = actualValue !== defaultValue;
   }
-
   return JSON.stringify(presentInputs);
 }
