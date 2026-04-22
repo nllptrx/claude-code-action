@@ -48,9 +48,10 @@ jobs:
 
             # Empty lines above should be ignored
           # Upstream removed allowed_tools / timeout_minutes from base-action
-          # inputs; everything now flows through claude_args.
+          # inputs; everything now flows through claude_args. Flag is camelCase
+          # to match what test-structured-output.yml uses successfully.
           claude_args: |
-            --allowed-tools Bash
+            --allowedTools Bash
 
       - name: Verify comment handling
         run: |
