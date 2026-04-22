@@ -105,6 +105,27 @@ export class GiteaApiClient {
     return this.request("GET", `/repos/${owner}/${repo}`);
   }
 
+  /**
+   * Gitea collaborator permission endpoint.
+   * Mirrors GitHub's `GET /repos/:owner/:repo/collaborators/:username/permission`.
+   * Response shape (RepoCollaboratorPermission):
+   *   { permission: "read" | "write" | "admin", role_name: string, user: {...} }
+   */
+  async getCollaboratorPermission(
+    owner: string,
+    repo: string,
+    username: string,
+  ) {
+    return this.request<{
+      permission: "read" | "write" | "admin";
+      role_name?: string;
+      user?: unknown;
+    }>(
+      "GET",
+      `/repos/${owner}/${repo}/collaborators/${encodeURIComponent(username)}/permission`,
+    );
+  }
+
   // Simple test endpoint to verify API connectivity
   async testConnection() {
     return this.request("GET", "/version");

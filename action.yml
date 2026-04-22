@@ -63,6 +63,14 @@ inputs:
     description: "Comma-separated list of actor usernames to EXCLUDE from comments. Supports wildcards: '*[bot]' matches all bots, 'renovate[bot]' matches specific bot. Empty (default) excludes none. If actor is in both lists, exclusion takes priority."
     required: false
     default: ""
+  allowed_non_write_users:
+    description: |
+      Comma-separated list of usernames to allow without write permissions, or '*' to allow all users.
+      Only works when `gitea_token` input is provided. WARNING: Use with extreme caution - this
+      bypasses security checks and should only be used for workflows with very limited permissions
+      (e.g., issue labeling).
+    required: false
+    default: ""
 
   # New Claude Code settings
   settings:
@@ -210,6 +218,7 @@ runs:
         PROMPT: ${{ inputs.prompt }}
         BRANCH_NAME_TEMPLATE: ${{ inputs.branch_name_template }}
         SSH_SIGNING_KEY: ${{ inputs.ssh_signing_key }}
+        ALLOWED_NON_WRITE_USERS: ${{ inputs.allowed_non_write_users }}
         ADDITIONAL_PERMISSIONS: ${{ inputs.additional_permissions }}
         INCLUDE_COMMENTS_BY_ACTOR: ${{ inputs.include_comments_by_actor }}
         EXCLUDE_COMMENTS_BY_ACTOR: ${{ inputs.exclude_comments_by_actor }}

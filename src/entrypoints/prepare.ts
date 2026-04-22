@@ -44,6 +44,8 @@ async function run() {
     const hasWritePermissions = await checkWritePermissions(
       client.api,
       context,
+      context.inputs.allowedNonWriteUsers,
+      !!process.env.OVERRIDE_GITHUB_TOKEN,
     );
     if (!hasWritePermissions) {
       throw new Error(

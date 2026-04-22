@@ -105,4 +105,137 @@ describe("checkWritePermissions", () => {
     );
     errorSpy.mockRestore();
   });
+
+  describe("collaborator permission endpoint", () => {
+    test("returns true when collaborator permission is 'write'", async () => {
+      const mockApi = {
+        getCollaboratorPermission: async () => ({
+          data: { permission: "write" },
+        }),
+      } as any;
+      const result = await checkWritePermissions(mockApi, baseContext);
+      expect(result).toBe(true);
+    });
+
+    test("returns true when collaborator permission is 'admin'", async () => {
+      const mockApi = {
+        getCollaboratorPermission: async () => ({
+          data: { permission: "admin" },
+        }),
+      } as any;
+      const result = await checkWritePermissions(mockApi, baseContext);
+      expect(result).toBe(true);
+    });
+
+    test("returns false when collaborator permission is 'read'", async () => {
+      const warnSpy = spyOn(core, "warning").mockImplementation(() => {});
+      const mockApi = {
+        getCollaboratorPermission: async () => ({
+          data: { permission: "read" },
+        }),
+      } as any;
+      const result = await checkWritePermissions(mockApi, baseContext);
+      expect(result).toBe(false);
+      warnSpy.mockRestore();
+    });
+
+    test("falls back to getRepo when collaborator endpoint throws", async () => {
+      const mockApi = {
+        getCollaboratorPermission: async () => {
+          throw new Error("404 Not Found");
+        },
+        getRepo: async () => ({
+          data: { permissions: { admin: false, push: true, pull: true } },
+        }),
+      } as any;
+      const result = await checkWritePermissions(mockApi, baseContext);
+      expect(result).toBe(true);
+    });
+  });
+
+  describe("allowed_non_write_users bypass", () => {
+    const warnSpy = () => spyOn(core, "warning").mockImplementation(() => {});
+
+    test("bypasses permission check when actor is in allowlist and gitea_token provided", async () => {
+      const spy = warnSpy();
+      const mockApi = {
+        getCollaboratorPermission: async () => ({
+          data: { permission: "read" },
+        }),
+      } as any;
+      const result = await checkWritePermissions(
+        mockApi,
+        baseContext,
+        "alice, tester, bob",
+        true,
+      );
+      expect(result).toBe(true);
+      expect(spy).toHaveBeenCalled();
+      spy.mockRestore();
+    });
+
+    test("bypasses for any actor when allowlist is '*' and gitea_token provided", async () => {
+      const spy = warnSpy();
+      const mockApi = {
+        getCollaboratorPermission: async () => ({
+          data: { permission: "read" },
+        }),
+      } as any;
+      const result = await checkWritePermissions(
+        mockApi,
+        baseContext,
+        "*",
+        true,
+      );
+      expect(result).toBe(true);
+      spy.mockRestore();
+    });
+
+    test("does NOT bypass when giteaTokenProvided is false (even if actor is in list)", async () => {
+      const spy = spyOn(core, "warning").mockImplementation(() => {});
+      const mockApi = {
+        getCollaboratorPermission: async () => ({
+          data: { permission: "read" },
+        }),
+      } as any;
+      const result = await checkWritePermissions(
+        mockApi,
+        baseContext,
+        "tester",
+        false,
+      );
+      expect(result).toBe(false);
+      spy.mockRestore();
+    });
+
+    test("does NOT bypass when actor is not in allowlist", async () => {
+      const spy = spyOn(core, "warning").mockImplementation(() => {});
+      const mockApi = {
+        getCollaboratorPermission: async () => ({
+          data: { permission: "read" },
+        }),
+      } as any;
+      const result = await checkWritePermissions(
+        mockApi,
+        baseContext,
+        "alice,bob",
+        true,
+      );
+      expect(result).toBe(false);
+      spy.mockRestore();
+    });
+  });
+
+  describe("bot actor suffix", () => {
+    test("allows actors ending in [bot] without calling the API", async () => {
+      const botContext = { ...baseContext, actor: "renovate[bot]" };
+      const mockApi = {
+        getCollaboratorPermission: async () => {
+          throw new Error("should not be called");
+        },
+      } as any;
+      const result = await checkWritePermissions(mockApi, botContext);
+      expect(result).toBe(true);
+    });
+  });
 });

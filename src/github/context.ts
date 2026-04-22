@@ -29,6 +29,7 @@ type CommonInputs = {
   additionalPermissions: Map<string, string>;
   useCommitSigning: boolean;
   sshSigningKey?: string;
+  allowedNonWriteUsers?: string;
   includeCommentsByActor?: string;
   excludeCommentsByActor?: string;
 };
@@ -111,6 +112,7 @@ export function parseGitHubContext(): GitHubContext {
       useCommitSigning: process.env.USE_COMMIT_SIGNING === "true",
       sshSigningKey: process.env.SSH_SIGNING_KEY ?? "",
       prompt: process.env.PROMPT ?? "",
+      allowedNonWriteUsers: process.env.ALLOWED_NON_WRITE_USERS ?? "",
       includeCommentsByActor: process.env.INCLUDE_COMMENTS_BY_ACTOR ?? "",
       excludeCommentsByActor: process.env.EXCLUDE_COMMENTS_BY_ACTOR ?? "",
     },
