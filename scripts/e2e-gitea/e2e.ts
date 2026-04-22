@@ -14,7 +14,7 @@
  *   trigger assign ISSUE# USER     Assign a user to an issue.
  *   trigger label ISSUE# LABEL     Apply a label to an issue.
  *   trigger push-pr BRANCH FILE CONTENT [AUTHOR]
- *                                  Push a branch authored by AUTHOR (default: claude-bot)
+ *                                  Push a branch authored by AUTHOR (default: contributor)
  *                                  and open a PR. Use a non-admin author so Gitea doesn't
  *                                  block self-REQUEST_CHANGES reviews.
  *   watch [RUN_ID|latest]          Poll a workflow run until terminal. Exits 0 on success,
@@ -22,7 +22,7 @@
  *
  * Overrides via env vars (defaults in DEFAULTS below):
  *   GITEA_HTTP_PORT, GITEA_SSH_PORT
- *   ADMIN_USER, ADMIN_PASSWORD, CLAUDE_USER, CLAUDE_PASSWORD, CLAUDE_BOT_USER, ...
+ *   ADMIN_USER, ADMIN_PASSWORD, CLAUDE_USER, CLAUDE_PASSWORD, CONTRIBUTOR_USER, ...
  *   TEST_REPO, ACTION_REPO, ACTION_BRANCH
  */
 
@@ -46,8 +46,12 @@ const DEFAULTS = {
   ADMIN_PASSWORD: "admin123!",
   CLAUDE_USER: "claude",
   CLAUDE_PASSWORD: "claude123456",
-  CLAUDE_BOT_USER: "claude-bot",
-  CLAUDE_BOT_PASSWORD: "claudebot123",
+  // `contributor` simulates a non-admin developer who opens PRs against
+  // the test repo. It is NOT a bot — `claude` is the sole bot identity.
+  // Historical name was `claude-bot`, which misled readers into thinking
+  // two bots existed.
+  CONTRIBUTOR_USER: "contributor",
+  CONTRIBUTOR_PASSWORD: "contrib123",
   BOB_USER: "bob",
   BOB_PASSWORD: "bob123456",
   TEST_REPO: "e2e-dummy",
@@ -70,7 +74,7 @@ const GITEA_INTERNAL = "http://gitea:3000";
 const TOKEN_PATHS = {
   admin: resolve(HERE, ".admin-token"),
   claude: resolve(HERE, ".claude-pat"),
-  claudeBot: resolve(HERE, ".bob-token"), // reuse name for the non-admin bot token
+  contributor: resolve(HERE, ".contributor-token"),
   runner: resolve(HERE, ".runner-token"),
 };
 const ENV_RUNTIME = resolve(HERE, ".env.runtime");
@@ -368,7 +372,7 @@ async function up() {
 
   console.log("[4/8] creating bot users");
   await ensureUser(cfg.CLAUDE_USER, cfg.CLAUDE_PASSWORD);
-  await ensureUser(cfg.CLAUDE_BOT_USER, cfg.CLAUDE_BOT_PASSWORD);
+  await ensureUser(cfg.CONTRIBUTOR_USER, cfg.CONTRIBUTOR_PASSWORD);
   await ensureUser(cfg.BOB_USER, cfg.BOB_PASSWORD);
 
   console.log("[5/8] creating test repo + action mirror repo");
@@ -391,7 +395,7 @@ async function up() {
     .quiet();
   await setDefaultBranch(cfg.ADMIN_USER, cfg.ACTION_REPO, cfg.ACTION_BRANCH);
 
-  console.log("[7/8] collaborators + claude PAT + claude-bot PAT");
+  console.log("[7/8] collaborators + claude PAT + contributor PAT");
   await addCollaborator(
     cfg.ADMIN_USER,
     cfg.TEST_REPO,
@@ -401,7 +405,7 @@ async function up() {
   await addCollaborator(
     cfg.ADMIN_USER,
     cfg.TEST_REPO,
-    cfg.CLAUDE_BOT_USER,
+    cfg.CONTRIBUTOR_USER,
     "write",
   );
   const claudePat = await mintToken(
@@ -410,12 +414,12 @@ async function up() {
     "e2e-harness",
   );
   saveToken("claude", claudePat);
-  const claudeBotPat = await mintToken(
-    cfg.CLAUDE_BOT_USER,
-    cfg.CLAUDE_BOT_PASSWORD,
+  const contributorPat = await mintToken(
+    cfg.CONTRIBUTOR_USER,
+    cfg.CONTRIBUTOR_PASSWORD,
     "e2e-harness",
   );
-  saveToken("claudeBot", claudeBotPat);
+  saveToken("contributor", contributorPat);
   await ensureLabel(cfg.ADMIN_USER, cfg.TEST_REPO, cfg.LABEL_TRIGGER);
 
   // Get claude's numeric user ID for bot_id input
@@ -497,6 +501,12 @@ async function down() {
     .nothrow()
     .quiet();
   for (const p of Object.values(TOKEN_PATHS)) {
+    if (existsSync(p)) unlinkSync(p);
+  }
+  // Best-effort cleanup of legacy token files from before the
+  // claude-bot → contributor rename. Safe no-op on fresh checkouts.
+  for (const legacy of [".bob-token"]) {
+    const p = resolve(HERE, legacy);
     if (existsSync(p)) unlinkSync(p);
   }
   for (const f of [ENV_RUNTIME, resolve(HERE, ".env")]) {
@@ -623,7 +633,7 @@ async function trigger(args: string[]) {
     }
     case "push-pr": {
       const [branch, file, content, authorArg] = rest;
-      const author = authorArg ?? cfg.CLAUDE_BOT_USER;
+      const author = authorArg ?? cfg.CONTRIBUTOR_USER;
       if (!branch || !file || content === undefined)
         die("trigger push-pr BRANCH FILE CONTENT [AUTHOR]");
       const authorToken =
@@ -631,7 +641,7 @@ async function trigger(args: string[]) {
           ? readToken("admin")
           : author === cfg.CLAUDE_USER
             ? readToken("claude")
-            : readToken("claudeBot");
+            : readToken("contributor");
       const authorEmail = `${author}@localhost`;
       const wsDir = resolve(HERE, `pr-workspace-${Date.now()}`);
       const cloneUrl = `http://${author}:${authorToken}@127.0.0.1:${cfg.GITEA_HTTP_PORT}/${cfg.ADMIN_USER}/${cfg.TEST_REPO}.git`;
@@ -723,7 +733,7 @@ Subcommands:
   trigger label ISSUE# LABEL     Apply a label to an issue.
   trigger push-pr BRANCH FILE CONTENT [AUTHOR]
                                  Push a branch as AUTHOR and open a PR.
-                                 Default AUTHOR is ${DEFAULTS.CLAUDE_BOT_USER}.
+                                 Default AUTHOR is ${DEFAULTS.CONTRIBUTOR_USER}.
   watch [RUN_ID|latest]          Poll a run until terminal. 0=success, 1=fail.
 
 Overrides: set env vars matching the keys in DEFAULTS at top of e2e.ts.

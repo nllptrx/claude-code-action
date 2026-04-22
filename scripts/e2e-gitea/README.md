@@ -38,7 +38,7 @@ bun scripts/e2e-gitea/e2e.ts down
 | Container | `gitea-runner-e2e`            | `act_runner` registered with Gitea                               |
 | User      | `admin`                       | site admin, token → `.admin-token`                               |
 | User      | `claude`                      | write-only collaborator, token → `.claude-pat` (acts as the bot) |
-| User      | `claude-bot`                  | non-admin PR author, token → `.bob-token`                        |
+| User      | `contributor`                 | non-admin PR author (simulates a developer), token → `.contributor-token` |
 | User      | `bob`                         | non-write user for `allowed_non_write_users` bypass tests        |
 | Repo      | `admin/e2e-dummy`             | the repo the action is exercised against                         |
 | Repo      | `admin/claude-code-action`    | mirror of this repo's `gitea` branch                             |

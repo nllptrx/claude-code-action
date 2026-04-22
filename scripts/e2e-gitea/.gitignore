@@ -1,6 +1,6 @@
 .admin-token
 .claude-pat
-.bob-token
+.contributor-token
 .runner-token
 .env
 .env.runtime
