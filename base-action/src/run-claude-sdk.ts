@@ -172,6 +172,19 @@ export async function runClaudeWithSdk(
     }
   } catch (error) {
     console.error("SDK execution error:", error);
+    // Flush accumulated messages to disk BEFORE re-throwing, so run.ts and
+    // update-comment-link still have a debug log for transport / runtime
+    // failures that occur mid-stream. Without this the file the caller
+    // expects at ${RUNNER_TEMP}/claude-execution-output.json simply
+    // doesn't exist, and the step summary silently goes blank.
+    try {
+      await writeFile(EXECUTION_FILE, JSON.stringify(messages, null, 2));
+      console.log(`Partial log saved to ${EXECUTION_FILE}`);
+    } catch (writeError) {
+      core.warning(
+        `Failed to flush partial execution log: ${writeError}`,
+      );
+    }
     throw new Error(`SDK execution error: ${error}`);
   }
 

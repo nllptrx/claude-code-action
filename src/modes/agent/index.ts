@@ -93,6 +93,11 @@ export async function prepareAgentMode({
     baseBranch = branchInfo.baseBranch;
     currentBranch = branchInfo.currentBranch;
     claudeBranch = branchInfo.claudeBranch;
+    // createAgentPrompt → prepareContext reads context.inputs.baseBranch for
+    // $BASE_BRANCH substitution. Overwrite the provisional default (or
+    // user-supplied value) with the branch setupBranch actually resolved,
+    // which is the real target for PR events (not always default_branch).
+    context.inputs.baseBranch = baseBranch;
   } else {
     // Automation events (workflow_dispatch, schedule, workflow_run).
     const defaultBranch = context.repository.default_branch || "main";

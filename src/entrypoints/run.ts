@@ -191,7 +191,6 @@ async function emitBotNoreplyOutputs(context: GitHubContext): Promise<void> {
 
 async function run() {
   let githubToken: string | undefined;
-  let commentId: number | undefined;
   let claudeBranch: string | undefined;
   let baseBranch: string | undefined;
   let executionFile: string | undefined;
@@ -264,14 +263,13 @@ async function run() {
         ? await prepareTagMode({ context, client, githubToken })
         : await prepareAgentMode({ context, client, githubToken });
 
-    commentId = prepareResult.commentId;
     claudeBranch = prepareResult.branchInfo.claudeBranch;
     baseBranch = prepareResult.branchInfo.baseBranch;
     prepareCompleted = true;
 
-    if (commentId !== undefined) {
-      core.setOutput("claude_comment_id", commentId.toString());
-    }
+    // claude_comment_id is emitted inside prepareTagMode at the creation
+    // site so later failures still let update-comment-link rewrite the
+    // placeholder into an error link.
     if (baseBranch) {
       core.setOutput("BASE_BRANCH", baseBranch);
     }

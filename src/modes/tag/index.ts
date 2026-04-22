@@ -1,3 +1,4 @@
+import * as core from "@actions/core";
 import { checkHumanActor } from "../../github/validation/actor";
 import { createInitialComment } from "../../github/operations/comments/create-initial";
 import { updateTrackingComment } from "../../github/operations/comments/update-with-branch";
@@ -36,6 +37,10 @@ export async function prepareTagMode({
   await checkHumanActor(client.api, context);
 
   const commentId = await createInitialComment(client.api, context);
+  // Emit as soon as the comment exists so any later failure in this
+  // function still lets `update-comment-link` rewrite the "Claude is
+  // working…" placeholder into an error link instead of leaving it stuck.
+  core.setOutput("claude_comment_id", commentId.toString());
 
   const githubData = await fetchGitHubData({
     client,
