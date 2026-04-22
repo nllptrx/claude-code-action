@@ -38,7 +38,6 @@ jobs:
                 "allow": ["Bash(echo:*)"]
               }
             }
-          timeout_minutes: "2"
 
       - name: Verify echo worked
         run: |
@@ -92,7 +91,6 @@ jobs:
                 "deny": ["Bash(echo:*)"]
               }
             }
-          timeout_minutes: "2"
 
       - name: Verify echo was denied
         run: |
@@ -134,7 +132,6 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CREDENTIALS }}
           settings: "test-settings.json"
-          timeout_minutes: "2"
 
       - name: Verify echo worked
         run: |
@@ -193,7 +190,6 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CREDENTIALS }}
           settings: "test-settings.json"
-          timeout_minutes: "2"
 
       - name: Verify echo was denied
         run: |

@@ -6,7 +6,19 @@ on:
   push:
     branches:
       - main
+  # Paths filter here because workflow_call bypasses the callee's pull_request
+  # paths filter — if ci-all fires on every PR, every test-* sub-workflow runs
+  # regardless of the callee's paths. Mirror the union of their filters so
+  # docs-only PRs skip base-action tests entirely.
   pull_request:
+    paths:
+      - "base-action/**"
+      - ".github/workflows/ci-all.yml"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/test-*.yml"
+      - "package.json"
+      - "bun.lock"
+      - "tsconfig.json"
   workflow_dispatch:
 
 concurrency:

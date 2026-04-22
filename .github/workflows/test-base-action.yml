@@ -38,8 +38,7 @@ jobs:
           prompt: ${{ github.event.inputs.test_prompt || 'List the files in the current directory starting with "package"' }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CREDENTIALS }}
-          allowed_tools: "LS,Read"
-          timeout_minutes: "3"
+          claude_args: --allowedTools "LS,Read"
 
       - name: Verify inline prompt output
         run: |
@@ -100,8 +99,7 @@ jobs:
           prompt_file: "test-prompt.txt"
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CREDENTIALS }}
-          allowed_tools: "LS,Read"
-          timeout_minutes: "3"
+          claude_args: --allowedTools "LS,Read"
 
       - name: Verify prompt file output
         run: |

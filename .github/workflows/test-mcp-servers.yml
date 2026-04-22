@@ -126,7 +126,9 @@ jobs:
           prompt: "List all available tools"
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CREDENTIALS }}
-          mcp_config: '{"mcpServers":{"test-server":{"type":"stdio","command":"bun","args":["simple-mcp-server.ts"],"env":{}}}}'
+          # Upstream removed mcp_config as a first-class input; pass via claude_args instead.
+          claude_args: |
+            --mcp-config {"mcpServers":{"test-server":{"type":"stdio","command":"bun","args":["simple-mcp-server.ts"],"env":{}}}}
         env:
           # Change to test directory so bun can find the MCP server script
           CLAUDE_WORKING_DIR: ${{ github.workspace }}/base-action/test/mcp-test
