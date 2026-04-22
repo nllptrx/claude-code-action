@@ -29,6 +29,29 @@ export async function prepareAgentMode({
 }) {
   await checkHumanActor(client.api, context);
 
+  // Compat: the published `prompt` input is an alternate spelling of
+  // `direct_prompt`. Promote it before createAgentPrompt so workflows that
+  // set only `prompt:` keep working.
+  if (
+    !context.inputs.directPrompt &&
+    !context.inputs.overridePrompt &&
+    context.inputs.prompt
+  ) {
+    context.inputs.directPrompt = context.inputs.prompt;
+  }
+
+  // Resolve baseBranch for entity-event prompt substitution. prepareContext
+  // (called inside createAgentPrompt's override_prompt path) requires a
+  // base branch for issue / issue_comment events. Tag mode resolves this
+  // via setupBranch; agent mode doesn't branch, so default to the repo's
+  // default_branch when the user didn't supply one.
+  if (!context.inputs.baseBranch) {
+    context.inputs.baseBranch =
+      context.repository.default_branch ||
+      process.env.GITHUB_REF_NAME ||
+      "main";
+  }
+
   // SSH signing takes precedence when set. API commit signing is upstream-
   // only (relies on GitHub file_ops MCP); on Gitea we fall through to plain
   // git CLI auth in that branch too.

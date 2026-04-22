@@ -233,15 +233,17 @@ async function run() {
     const modeName = context.inputs.mode;
     console.log(`Using configured mode: ${modeName}`);
 
-    // Agent mode activates when the user supplies direct_prompt or
-    // override_prompt (what createAgentPrompt actually consumes).
-    // Checking context.inputs.prompt here would falsely trigger on runs that
-    // can't produce a prompt file — then createAgentPrompt would throw.
+    // Agent mode activates when the user supplies any prompt-bearing input.
+    // createAgentPrompt consumes direct_prompt / override_prompt; the
+    // published `prompt` input is an alias promoted to direct_prompt inside
+    // prepareAgentMode.
     const containsTrigger =
       modeName === "tag"
         ? isEntityContext(context) && checkContainsTrigger(context)
         : !!(
-            context.inputs.directPrompt || context.inputs.overridePrompt
+            context.inputs.directPrompt ||
+            context.inputs.overridePrompt ||
+            context.inputs.prompt
           );
     core.setOutput("contains_trigger", containsTrigger.toString());
 
