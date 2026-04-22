@@ -56,6 +56,9 @@ jobs:
       - name: Verify comment handling
         run: |
           OUTPUT_FILE="${{ steps.comment-test.outputs.execution_file }}"
+          echo "=== Execution file contents (diagnostic) ==="
+          cat "$OUTPUT_FILE" || echo "(file missing)"
+          echo "=== End ==="
           if [ "${{ steps.comment-test.outputs.conclusion }}" = "success" ]; then
             echo "✅ Comments in claude_env handled correctly"
             if grep -q "value1" "$OUTPUT_FILE" && grep -q "value2" "$OUTPUT_FILE"; then
