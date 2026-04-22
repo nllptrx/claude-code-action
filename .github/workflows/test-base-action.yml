@@ -12,6 +12,12 @@ on:
 
 jobs:
   test-inline-prompt:
+    # Cost gate: skip on fork PRs (secrets unavailable anyway) and skip cleanly
+    # when CLAUDE_CREDENTIALS / ANTHROPIC_API_KEY is unset so jobs don't fail red.
+    if: >-
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      (secrets.CLAUDE_CREDENTIALS != '' || secrets.ANTHROPIC_API_KEY != '')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -63,6 +69,10 @@ jobs:
           fi
 
   test-prompt-file:
+    if: >-
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      (secrets.CLAUDE_CREDENTIALS != '' || secrets.ANTHROPIC_API_KEY != '')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4

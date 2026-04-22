@@ -7,6 +7,10 @@ on:
 
 jobs:
   test-mcp-integration:
+    if: >-
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      (secrets.CLAUDE_CREDENTIALS != '' || secrets.ANTHROPIC_API_KEY != '')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -77,6 +81,10 @@ jobs:
           echo "✓ All MCP server checks passed!"
 
   test-mcp-config-flag:
+    if: >-
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      (secrets.CLAUDE_CREDENTIALS != '' || secrets.ANTHROPIC_API_KEY != '')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

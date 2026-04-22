@@ -11,6 +11,10 @@ permissions:
 jobs:
   test-basic-types:
     name: Test Basic Type Conversions
+    if: >-
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      (secrets.CLAUDE_CREDENTIALS != '' || secrets.ANTHROPIC_API_KEY != '')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -70,6 +74,10 @@ jobs:
 
   test-complex-types:
     name: Test Arrays and Objects
+    if: >-
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      (secrets.CLAUDE_CREDENTIALS != '' || secrets.ANTHROPIC_API_KEY != '')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -121,6 +129,10 @@ jobs:
 
   test-edge-cases:
     name: Test Edge Cases
+    if: >-
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      (secrets.CLAUDE_CREDENTIALS != '' || secrets.ANTHROPIC_API_KEY != '')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -180,6 +192,10 @@ jobs:
 
   test-name-sanitization:
     name: Test Output Name Sanitization
+    if: >-
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      (secrets.CLAUDE_CREDENTIALS != '' || secrets.ANTHROPIC_API_KEY != '')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -220,6 +236,10 @@ jobs:
 
   test-execution-file-structure:
     name: Test Execution File Format
+    if: >-
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      (secrets.CLAUDE_CREDENTIALS != '' || secrets.ANTHROPIC_API_KEY != '')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -270,7 +290,13 @@ jobs:
       - test-edge-cases
       - test-name-sanitization
       - test-execution-file-structure
-    if: always()
+    # always() so the summary still runs when tests fail, but gate on secret
+    # presence + repo identity so we don't print a red summary on forks.
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      (secrets.CLAUDE_CREDENTIALS != '' || secrets.ANTHROPIC_API_KEY != '')
     steps:
       - name: Generate Summary
         run: |
