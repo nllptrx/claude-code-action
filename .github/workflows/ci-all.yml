@@ -28,40 +28,35 @@ jobs:
 
   test-base-action:
     if: >-
-      (github.event_name != 'pull_request' ||
-       github.event.pull_request.head.repo.full_name == github.repository) &&
-      (secrets.CLAUDE_CREDENTIALS != '' || secrets.ANTHROPIC_API_KEY != '')
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/test-base-action.yml
     secrets: inherit # Required for ANTHROPIC_API_KEY
 
   test-custom-executables:
     if: >-
-      (github.event_name != 'pull_request' ||
-       github.event.pull_request.head.repo.full_name == github.repository) &&
-      (secrets.CLAUDE_CREDENTIALS != '' || secrets.ANTHROPIC_API_KEY != '')
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/test-custom-executables.yml
     secrets: inherit
 
   test-mcp-servers:
     if: >-
-      (github.event_name != 'pull_request' ||
-       github.event.pull_request.head.repo.full_name == github.repository) &&
-      (secrets.CLAUDE_CREDENTIALS != '' || secrets.ANTHROPIC_API_KEY != '')
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/test-mcp-servers.yml
     secrets: inherit
 
   test-settings:
     if: >-
-      (github.event_name != 'pull_request' ||
-       github.event.pull_request.head.repo.full_name == github.repository) &&
-      (secrets.CLAUDE_CREDENTIALS != '' || secrets.ANTHROPIC_API_KEY != '')
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/test-settings.yml
     secrets: inherit
 
   test-structured-output:
     if: >-
-      (github.event_name != 'pull_request' ||
-       github.event.pull_request.head.repo.full_name == github.repository) &&
-      (secrets.CLAUDE_CREDENTIALS != '' || secrets.ANTHROPIC_API_KEY != '')
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/test-structured-output.yml
     secrets: inherit

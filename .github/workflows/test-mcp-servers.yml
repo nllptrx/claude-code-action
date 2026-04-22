@@ -18,9 +18,8 @@ concurrency:
 jobs:
   test-mcp-integration:
     if: >-
-      (github.event_name != 'pull_request' ||
-       github.event.pull_request.head.repo.full_name == github.repository) &&
-      (secrets.CLAUDE_CREDENTIALS != '' || secrets.ANTHROPIC_API_KEY != '')
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -92,9 +91,8 @@ jobs:
 
   test-mcp-config-flag:
     if: >-
-      (github.event_name != 'pull_request' ||
-       github.event.pull_request.head.repo.full_name == github.repository) &&
-      (secrets.CLAUDE_CREDENTIALS != '' || secrets.ANTHROPIC_API_KEY != '')
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
