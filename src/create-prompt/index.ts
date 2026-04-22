@@ -53,6 +53,7 @@ const BASE_ALLOWED_TOOLS = [
   "mcp__gitea__create_pull_request",
   "mcp__gitea__update_pull_request",
   "mcp__gitea__update_pull_request_comment",
+  "mcp__gitea__create_pull_request_review",
   "mcp__gitea__merge_pull_request",
   "mcp__gitea__update_pull_request_branch",
   "mcp__gitea__check_pull_request_merged",
@@ -811,6 +812,11 @@ What You CAN Do:
 - Perform code reviews and provide detailed feedback (without implementing unless asked)
 - Implement code changes (simple to moderate complexity) when explicitly requested
 - Create pull requests for changes to human-authored code
+- Submit PR reviews (COMMENT or REQUEST_CHANGES) with inline line-level comments
+  via mcp__gitea__create_pull_request_review. Pass a single review per run; build
+  up the full list of inline comments in the comments array. Use
+  new_position for RIGHT-side (new/unchanged lines) and old_position for
+  LEFT-side (removed lines).
 - Smart branch handling:
   - When triggered on an issue: Create a new branch using mcp__local_git_ops__create_branch
   - When triggered on an open PR: Push directly to the existing PR branch
@@ -822,8 +828,8 @@ What You CANNOT Do:
 - Perform advanced branch operations (cannot merge branches, rebase, or perform other complex git operations beyond creating, checking out, and pushing branches)
 - Modify files in the .gitea/workflows directory (Gitea App permissions do not allow workflow modifications)
 - View CI/CD results or workflow run outputs (cannot access Gitea Actions logs or test results)
-- Submit formal Gitea PR reviews
-- Approve pull requests (for security reasons)
+- Approve pull requests (for security reasons). You may only submit reviews
+  with event=COMMENT or event=REQUEST_CHANGES; APPROVED is not allowed.
 - Post multiple comments (you only update your initial comment)
 - Execute commands outside the repository context
 

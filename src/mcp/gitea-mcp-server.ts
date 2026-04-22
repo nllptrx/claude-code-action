@@ -4,6 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import fetch from "node-fetch";
+import { buildPrReviewPayload } from "./gitea-pr-review-payload";
 
 // Get configuration from environment variables
 const REPO_OWNER = process.env.REPO_OWNER;
@@ -1199,6 +1200,120 @@ server.tool(
           {
             type: "text",
             text: `Error updating pull request comment: ${errorMessage}`,
+          },
+        ],
+        error: errorMessage,
+        isError: true,
+      };
+    }
+  },
+);
+
+// Create a pull request review with optional line-level inline comments.
+//
+// Gitea's review API groups inline comments under a single review submission:
+//   POST /repos/:owner/:repo/pulls/:index/reviews
+//   body: { body, event, commit_id, comments: [{ body, path, new_position?, old_position? }] }
+//
+// event is intentionally restricted to "COMMENT" or "REQUEST_CHANGES" —
+// Claude must not auto-approve PRs (mirrors the guardrail in upstream's
+// github-inline-comment-server.ts: "Claude can't accidentally approve a PR").
+server.tool(
+  "create_pull_request_review",
+  "Submit a PR review with an optional body and line-level inline comments. " +
+    "Use event='COMMENT' for regular feedback; 'REQUEST_CHANGES' to block merge. " +
+    "Claude cannot APPROVE pull requests.",
+  {
+    owner: z.string().describe("Repository owner"),
+    repo: z.string().describe("Repository name"),
+    index: z
+      .number()
+      .int()
+      .positive()
+      .describe("Pull request index (the number in the PR URL)"),
+    body: z
+      .string()
+      .optional()
+      .describe(
+        "Review summary body (markdown). Optional — can be empty when you " +
+          "only want to post inline comments.",
+      ),
+    event: z
+      .enum(["COMMENT", "REQUEST_CHANGES"])
+      .describe(
+        "Review event. COMMENT: non-blocking feedback. REQUEST_CHANGES: block merge. " +
+          "APPROVED is intentionally not allowed.",
+      ),
+    commit_id: z
+      .string()
+      .optional()
+      .describe(
+        "Head commit SHA the review anchors to. Defaults to the PR's latest commit.",
+      ),
+    comments: z
+      .array(
+        z.object({
+          body: z.string().describe("Inline comment body (markdown)"),
+          path: z.string().describe("File path relative to repo root"),
+          new_position: z
+            .number()
+            .int()
+            .optional()
+            .describe(
+              "1-based line number in the NEW file (RIGHT side of the diff). " +
+                "Use this for comments on added or unchanged lines.",
+            ),
+          old_position: z
+            .number()
+            .int()
+            .optional()
+            .describe(
+              "1-based line number in the OLD file (LEFT side of the diff). " +
+                "Use this for comments on removed lines.",
+            ),
+        }),
+      )
+      .optional()
+      .describe(
+        "Line-level inline comments. Each comment must target a diff position via " +
+          "new_position (RIGHT side) or old_position (LEFT side). Leave the array " +
+          "out or empty for a review-level comment only.",
+      ),
+  },
+  async ({ owner, repo, index, body, event, commit_id, comments }) => {
+    try {
+      const payload = buildPrReviewPayload({
+        body,
+        event,
+        commit_id,
+        comments,
+      });
+
+      const review = await giteaRequest(
+        `/repos/${owner}/${repo}/pulls/${index}/reviews`,
+        "POST",
+        payload,
+      );
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(review, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.error(
+        `[GITEA-MCP] Error creating pull request review: ${errorMessage}`,
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error creating pull request review: ${errorMessage}`,
           },
         ],
         error: errorMessage,
