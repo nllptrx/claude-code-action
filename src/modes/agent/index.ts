@@ -5,6 +5,8 @@ import {
 } from "../../github/operations/git-config";
 import { checkHumanActor } from "../../github/validation/actor";
 import { createAgentPrompt, configureTools } from "../../create-prompt";
+import { fetchGitHubData } from "../../github/data/fetcher";
+import { isEntityContext } from "../../github/context";
 import type { GitHubContext } from "../../github/context";
 import type { GitHubClient } from "../../github/api/client";
 
@@ -41,7 +43,22 @@ export async function prepareAgentMode({
     // Continue anyway — git operations may still work with default config
   }
 
-  await createAgentPrompt(undefined, context);
+  // Entity-triggered agent runs (issue/PR events with `mode: agent` + an
+  // override_prompt) need githubData so substitutePromptVariables can expand
+  // $PR_NUMBER, $CHANGED_FILES, etc. Automation events (workflow_dispatch,
+  // schedule) have no entity to fetch, so undefined is correct there.
+  const githubData = isEntityContext(context)
+    ? await fetchGitHubData({
+        client,
+        repository: `${context.repository.owner}/${context.repository.repo}`,
+        prNumber: context.entityNumber.toString(),
+        isPR: context.isPR,
+        includeCommentsByActor: context.inputs.includeCommentsByActor || "",
+        excludeCommentsByActor: context.inputs.excludeCommentsByActor || "",
+      })
+    : undefined;
+
+  await createAgentPrompt(githubData, context);
   configureTools(context);
 
   const claudeBranch = process.env.CLAUDE_BRANCH || undefined;

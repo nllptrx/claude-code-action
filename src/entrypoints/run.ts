@@ -328,42 +328,42 @@ async function run() {
     // the log attached for update-comment-link / step summary.
     const sdkExecutionFile = `${process.env.RUNNER_TEMP || "/tmp"}/claude-execution-output.json`;
 
-    // SDK path has no native per-invocation timeout; keep the published
-    // `timeout_minutes` input honored by racing against a deadline.
-    const runClaudeCall = runClaude(promptConfig.path, {
-      claudeArgs,
-      allowedTools: process.env.ALLOWED_TOOLS,
-      disallowedTools: process.env.DISALLOWED_TOOLS,
-      maxTurns: process.env.MAX_TURNS,
-      systemPrompt: process.env.SYSTEM_PROMPT,
-      appendSystemPrompt: process.env.APPEND_SYSTEM_PROMPT,
-      fallbackModel: process.env.FALLBACK_MODEL,
-      model: process.env.ANTHROPIC_MODEL,
-      pathToClaudeCodeExecutable: claudeExecutable,
-      showFullOutput: process.env.INPUT_SHOW_FULL_OUTPUT,
-    });
-    const timeoutMinutesRaw = process.env.TIMEOUT_MINUTES ?? "";
-    const timeoutMinutes = parseInt(timeoutMinutesRaw, 10);
-    const claudeInvocation =
-      Number.isFinite(timeoutMinutes) && timeoutMinutes > 0
-        ? Promise.race([
-            runClaudeCall,
-            new Promise<never>((_, reject) =>
-              setTimeout(
-                () =>
-                  reject(
-                    new Error(
-                      `Claude execution exceeded timeout_minutes=${timeoutMinutes}`,
-                    ),
-                  ),
-                timeoutMinutes * 60 * 1000,
-              ).unref(),
-            ),
-          ])
-        : runClaudeCall;
+    // Hard per-invocation timeout. The SDK `query()` iterator exposes no
+    // cancellation API, so a Promise.race alone would only reject the outer
+    // await while the generator keeps running. Force a process exit so the
+    // runner reaps the step — matches the v0.0.63 subprocess semantics.
+    const timeoutMinutes = parseInt(process.env.TIMEOUT_MINUTES ?? "", 10);
+    let timeoutHandle: NodeJS.Timeout | undefined;
+    if (Number.isFinite(timeoutMinutes) && timeoutMinutes > 0) {
+      timeoutHandle = setTimeout(
+        () => {
+          core.setFailed(
+            `Claude execution exceeded timeout_minutes=${timeoutMinutes}`,
+          );
+          core.setOutput("conclusion", "failure");
+          // Exit code 124 matches `timeout(1)` and the previous CLI path.
+          process.exit(124);
+        },
+        timeoutMinutes * 60 * 1000,
+      );
+      timeoutHandle.unref();
+    }
 
     try {
-      const claudeResult = await claudeInvocation;
+      const claudeResult = await runClaude(promptConfig.path, {
+        claudeArgs,
+        allowedTools: process.env.ALLOWED_TOOLS,
+        disallowedTools: process.env.DISALLOWED_TOOLS,
+        maxTurns: process.env.MAX_TURNS,
+        systemPrompt: process.env.SYSTEM_PROMPT,
+        appendSystemPrompt: process.env.APPEND_SYSTEM_PROMPT,
+        fallbackModel: process.env.FALLBACK_MODEL,
+        model: process.env.ANTHROPIC_MODEL,
+        pathToClaudeCodeExecutable: claudeExecutable,
+        showFullOutput: process.env.INPUT_SHOW_FULL_OUTPUT,
+        claudeEnv: process.env.CLAUDE_ENV,
+      });
+      if (timeoutHandle) clearTimeout(timeoutHandle);
 
       claudeSuccess = claudeResult.conclusion === "success";
       executionFile = claudeResult.executionFile ?? sdkExecutionFile;
@@ -379,6 +379,7 @@ async function run() {
       }
       core.setOutput("conclusion", claudeResult.conclusion);
     } catch (sdkError) {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
       // runClaudeWithSdk throws on non-success results AFTER writing the
       // execution file. Re-throw to propagate the failure, but first record
       // the execution file path so the step-summary and follow-up comment
