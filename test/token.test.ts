@@ -53,12 +53,13 @@ describe("setupGitHubToken (Gitea-compatible auth)", () => {
   });
 
   it("fails with gitea_token guidance when neither env var is set", async () => {
-    await expect(setupGitHubToken()).rejects.toThrow("process.exit called");
+    // Now throws instead of process.exit so the unified run.ts
+    // catch/finally can publish prepare_success=false + prepare_error
+    // for update-comment-link before the step exits.
+    await expect(setupGitHubToken()).rejects.toThrow(/gitea_token/);
 
-    expect(setFailedSpy).toHaveBeenCalledTimes(1);
-    const failureMessage = setFailedSpy.mock.calls[0]?.[0] as string;
-    expect(failureMessage).toContain("gitea_token");
-    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(setFailedSpy).not.toHaveBeenCalled();
+    expect(exitSpy).not.toHaveBeenCalled();
   });
 
   it("ignores empty OVERRIDE_GITHUB_TOKEN and uses GITHUB_TOKEN", async () => {

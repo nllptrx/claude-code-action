@@ -1,4 +1,3 @@
-import * as core from "@actions/core";
 import type { GitHubContext } from "../github/context";
 import { GITEA_API_URL } from "../github/api/config";
 
@@ -78,7 +77,8 @@ export async function prepareMcpConfig({
     return configString;
   } catch (error) {
     console.error("[MCP-INSTALL] MCP config generation failed:", error);
-    core.setFailed(`Install MCP server failed with error: ${error}`);
-    process.exit(1);
+    // Re-throw instead of process.exit so the unified run.ts catch/finally
+    // can publish prepare_success=false + prepare_error for update-comment-link.
+    throw new Error(`Install MCP server failed with error: ${error}`);
   }
 }

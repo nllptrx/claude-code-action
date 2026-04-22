@@ -26,9 +26,10 @@ export async function setupGitHubToken(): Promise<string> {
       "No GitHub token available. Please provide a gitea_token input or ensure GITHUB_TOKEN is available in the workflow environment.",
     );
   } catch (error) {
-    core.setFailed(
-      `Failed to setup GitHub token: ${error}.\n\nPlease provide a \`gitea_token\` in the \`with\` section of the action in your workflow yml file, or ensure the workflow has access to the default GITHUB_TOKEN.`,
+    // Re-throw instead of process.exit so the unified run.ts catch/finally
+    // can publish prepare_success=false + prepare_error for update-comment-link.
+    throw new Error(
+      `Failed to setup GitHub token: ${error}. Please provide a 'gitea_token' in the 'with' section of the action in your workflow yml file, or ensure the workflow has access to the default GITHUB_TOKEN.`,
     );
-    process.exit(1);
   }
 }

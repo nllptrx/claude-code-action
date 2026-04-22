@@ -1022,7 +1022,8 @@ export async function createPrompt(
 
     configureTools(context);
   } catch (error) {
-    core.setFailed(`Create prompt failed with error: ${error}`);
-    process.exit(1);
+    // Re-throw instead of process.exit so the unified run.ts catch/finally
+    // can publish prepare_success=false + prepare_error for update-comment-link.
+    throw new Error(`Create prompt failed with error: ${error}`);
   }
 }
