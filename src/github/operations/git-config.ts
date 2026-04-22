@@ -19,6 +19,26 @@ type GitUser = {
   id: number;
 };
 
+/**
+ * Build a GitUser from the action's `bot_id` / `bot_name` inputs when set.
+ * Returns null when either input is missing/empty or botId isn't a positive
+ * integer. Callers can pass the result as the `user` arg to
+ * `configureGitAuth` to force a specific account identity for git commits.
+ *
+ * Ported from upstream's modes/{agent,tag}/index.ts pattern:
+ *   const user = { login: context.inputs.botName, id: parseInt(context.inputs.botId) };
+ */
+export function getBotUserFromInputs(
+  context: ParsedGitHubContext,
+): GitUser | null {
+  const botName = context.inputs.botName?.trim();
+  const botId = context.inputs.botId?.trim();
+  if (!botName || !botId) return null;
+  const id = parseInt(botId, 10);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  return { login: botName, id };
+}
+
 export async function configureGitAuth(
   githubToken: string,
   context: ParsedGitHubContext,
@@ -33,17 +53,26 @@ export async function configureGitAuth(
       ? "users.noreply.github.com"
       : `users.noreply.${serverUrl.hostname}`;
 
-  // Configure git user based on the comment creator
+  // Configure git user — priority order:
+  //  1. Explicit `user` arg (e.g., the comment creator for author-preserving
+  //     commits).
+  //  2. `bot_id` / `bot_name` action inputs (via getBotUserFromInputs) —
+  //     lets maintainers pin the action to a specific bot account without
+  //     touching the caller.
+  //  3. Hard-coded github-actions[bot] fallback (legacy behavior).
   console.log("Configuring git user...");
-  if (user) {
-    const botName = user.login;
-    const botId = user.id;
+  const resolvedUser = user ?? getBotUserFromInputs(context);
+  if (resolvedUser) {
+    const botName = resolvedUser.login;
+    const botId = resolvedUser.id;
     console.log(`Setting git user as ${botName}...`);
     await $`git config user.name "${botName}"`;
     await $`git config user.email "${botId}+${botName}@${noreplyDomain}"`;
     console.log(`✓ Set git user as ${botName}`);
   } else {
-    console.log("No user data in comment, using default bot user");
+    console.log(
+      "No user data in comment and no bot_id/bot_name set, using default bot user",
+    );
     await $`git config user.name "github-actions[bot]"`;
     await $`git config user.email "41898282+github-actions[bot]@${noreplyDomain}"`;
   }

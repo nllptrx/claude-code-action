@@ -79,6 +79,14 @@ inputs:
     description: "Include 'Fix this →' links in PR code review feedback that open Claude Code with context to fix the identified issue."
     required: false
     default: "true"
+  bot_id:
+    description: "Numeric user ID of the account Claude should impersonate for git commits (used in the noreply email format `{id}+{login}@users.noreply.{host}`). Distinct from `claude_git_email` / `claude_git_name`, which set the raw git author strings. When set together with `bot_name`, overrides the fallback identity inside `configureGitAuth`."
+    required: false
+    default: ""
+  bot_name:
+    description: "Username/login of the account Claude should impersonate for git commits (companion to `bot_id`). When both `bot_id` and `bot_name` are set, `configureGitAuth` uses them instead of the hard-coded github-actions[bot] fallback."
+    required: false
+    default: ""
 
   # New Claude Code settings
   settings:
@@ -229,6 +237,8 @@ runs:
         ALLOWED_NON_WRITE_USERS: ${{ inputs.allowed_non_write_users }}
         ALLOWED_BOTS: ${{ inputs.allowed_bots }}
         INCLUDE_FIX_LINKS: ${{ inputs.include_fix_links }}
+        BOT_ID: ${{ inputs.bot_id }}
+        BOT_NAME: ${{ inputs.bot_name }}
         ADDITIONAL_PERMISSIONS: ${{ inputs.additional_permissions }}
         INCLUDE_COMMENTS_BY_ACTOR: ${{ inputs.include_comments_by_actor }}
         EXCLUDE_COMMENTS_BY_ACTOR: ${{ inputs.exclude_comments_by_actor }}
