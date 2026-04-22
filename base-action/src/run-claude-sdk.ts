@@ -168,9 +168,7 @@ export async function runClaudeWithSdk(
       await writeFile(EXECUTION_FILE, JSON.stringify(messages, null, 2));
       lastFlushedCount = messages.length;
     } catch (writeError) {
-      core.warning(
-        `Failed to flush partial execution log: ${writeError}`,
-      );
+      core.warning(`Failed to flush partial execution log: ${writeError}`);
     }
   };
 

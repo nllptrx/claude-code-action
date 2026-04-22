@@ -1,5 +1,20 @@
 import type { GitHubContext } from "../github/context";
-import { GITEA_API_URL } from "../github/api/config";
+import { getServerUrl } from "../github/api/config";
+
+/**
+ * Resolve the Gitea API URL at call time rather than module-load time.
+ * The module-level `GITEA_API_URL` constant in `../github/api/config` is
+ * frozen on first import, which made prepareMcpConfig observe stale values
+ * when tests mutate `process.env.GITEA_API_URL` after import (test-order
+ * dependent; locally passed, CI failed).
+ */
+function deriveApiUrlAtRuntime(): string {
+  const explicit = process.env.GITEA_API_URL;
+  if (explicit && explicit.trim() !== "") return explicit;
+  const serverUrl = getServerUrl();
+  if (serverUrl.includes("github.com")) return "https://api.github.com";
+  return `${serverUrl}/api/v1`;
+}
 
 export type PrepareMcpConfigOptions = {
   githubToken: string;
@@ -48,7 +63,7 @@ export async function prepareMcpConfig({
             REPO_NAME: repo,
             BRANCH_NAME: branch,
             REPO_DIR: process.env.GITHUB_WORKSPACE || process.cwd(),
-            GITEA_API_URL,
+            GITEA_API_URL: deriveApiUrlAtRuntime(),
           },
         },
         local_git_ops: {
@@ -63,7 +78,7 @@ export async function prepareMcpConfig({
             REPO_NAME: repo,
             BRANCH_NAME: branch,
             REPO_DIR: process.env.GITHUB_WORKSPACE || process.cwd(),
-            GITEA_API_URL,
+            GITEA_API_URL: deriveApiUrlAtRuntime(),
           },
         },
       },

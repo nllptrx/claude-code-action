@@ -72,9 +72,7 @@ export async function prepareAgentMode({
   // points at it, so Claude's local git tools commit/push to the right
   // place. Fetch data first (also used for override_prompt variable
   // substitution); automation events skip both.
-  let githubData:
-    | Awaited<ReturnType<typeof fetchGitHubData>>
-    | undefined;
+  let githubData: Awaited<ReturnType<typeof fetchGitHubData>> | undefined;
   let baseBranch: string;
   let currentBranch: string;
   let claudeBranch: string | undefined;

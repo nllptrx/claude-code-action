@@ -28,9 +28,7 @@ type GitUser = {
  * Ported from upstream's modes/{agent,tag}/index.ts pattern:
  *   const user = { login: context.inputs.botName, id: parseInt(context.inputs.botId) };
  */
-export function getBotUserFromInputs(
-  context: GitHubContext,
-): GitUser | null {
+export function getBotUserFromInputs(context: GitHubContext): GitUser | null {
   const botName = context.inputs.botName?.trim();
   const botId = context.inputs.botId?.trim();
   if (!botName || !botId) return null;

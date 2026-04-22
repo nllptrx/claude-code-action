@@ -180,10 +180,7 @@ async function emitBotNoreplyOutputs(context: GitHubContext): Promise<void> {
       ? "users.noreply.github.com"
       : `users.noreply.${hostname}`;
   core.setOutput("effective_git_name", botName);
-  core.setOutput(
-    "effective_git_email",
-    `${botId}+${botName}@${noreplyDomain}`,
-  );
+  core.setOutput("effective_git_email", `${botId}+${botName}@${noreplyDomain}`);
   console.log(
     `Effective git author from bot_id/bot_name: ${botName} <${botId}+${botName}@${noreplyDomain}>`,
   );

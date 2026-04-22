@@ -9,11 +9,13 @@ This document outlines the changes made to migrate from GitHub App authenticatio
 ### What changed
 
 Before:
+
 - `action.yml` ran a two-step pipeline:
   1. `src/entrypoints/prepare.ts` — built context, fetched data, wrote prompt, emitted `mcp_config` as a step output.
   2. `uses: anthropics/claude-code-base-action@v0.0.63` — external, frozen since Aug 2025, invoked Claude via CLI subprocess.
 
 After:
+
 - `action.yml` runs a single in-process orchestrator: `bun run src/entrypoints/run.ts`.
 - `run.ts` imports `./base-action/src/*` directly (no external action, no subprocess boundary).
 - Claude is invoked through the SDK wrapper (`runClaude` → `runClaudeWithSdk`).
@@ -24,12 +26,12 @@ The external pin is gone. The local `./base-action/` directory — previously ke
 
 These inputs existed in `action.yml` as stubs and were plumbed as env vars but never reached Claude. They are wired through the unified entrypoint:
 
-| Input | Purpose |
-|-------|---------|
-| `show_full_output` | Print the full JSON message stream from Claude. **WARNING**: exposes tool results (possibly secrets) in workflow logs. Use only for non-sensitive debugging. |
-| `plugins` | Newline-separated list of Claude Code plugin names to install before running (`installPlugins`). |
-| `plugin_marketplaces` | Newline-separated list of plugin marketplace Git URLs. |
-| `display_report` | Render Claude's turns as a Step Summary at the end of the run. `"false"` suppresses. Default `"true"`. |
+| Input                 | Purpose                                                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `show_full_output`    | Print the full JSON message stream from Claude. **WARNING**: exposes tool results (possibly secrets) in workflow logs. Use only for non-sensitive debugging. |
+| `plugins`             | Newline-separated list of Claude Code plugin names to install before running (`installPlugins`).                                                             |
+| `plugin_marketplaces` | Newline-separated list of plugin marketplace Git URLs.                                                                                                       |
+| `display_report`      | Render Claude's turns as a Step Summary at the end of the run. `"false"` suppresses. Default `"true"`.                                                       |
 
 ### Input shape unchanged
 
@@ -48,7 +50,6 @@ All previously-supported inputs continue to work with the same names: `max_turns
 It's gone. Entity-context flow lives in `src/modes/tag/index.ts#prepareTagMode`. Automation/agent flow lives in `src/modes/agent/index.ts#prepareAgentMode`. Both are invoked from `src/entrypoints/run.ts`.
 
 ---
-
 
 ## What Changed
 
