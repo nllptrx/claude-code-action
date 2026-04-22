@@ -47,6 +47,12 @@ jobs:
           allowed_non_write_users: "${ALLOWED_NON_WRITE_USERS}"
           bot_id: "${BOT_ID}"
           bot_name: "${BOT_NAME}"
+          # Exercise an input introduced by the local-base-action switch
+          # (issue #1). Value "false" is cheap to validate without a real
+          # Claude call: run.ts reads DISPLAY_REPORT before emitting the
+          # step summary, so the wiring is exercised even when Anthropic
+          # auth is absent in the harness.
+          display_report: "false"
           custom_instructions: |
             E2E test run. When the issue body asks you to make changes
             (create a file, edit a file, open a PR, submit a review, etc.),
