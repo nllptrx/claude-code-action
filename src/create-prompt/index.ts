@@ -766,11 +766,35 @@ ${!eventData.isPR || !eventData.claudeBranch ? `6. Final Update:` : `5. Final Up
 
 Important Notes:
 - All communication must happen through Gitea PR comments.
-- Never create new comments. Only update the existing comment using ${eventData.eventName === "pull_request_review_comment" ? "mcp__gitea__update_pull_request_comment" : "mcp__gitea__update_issue_comment"} with comment_id: ${context.claudeCommentId}.
-- This includes ALL responses: code reviews, answers to questions, progress updates, and final results.${eventData.isPR ? "\n- PR CRITICAL: After reading files and forming your response, you MUST post it by calling mcp__gitea__update_issue_comment. Do NOT just respond with a normal response, the user will not see it." : ""}
-- You communicate exclusively by editing your single comment - not through any other means.
+- Do not create new issue/PR comments. Only update the existing tracking comment using ${eventData.eventName === "pull_request_review_comment" ? "mcp__gitea__update_pull_request_comment" : "mcp__gitea__update_issue_comment"} with comment_id: ${context.claudeCommentId}. **EXCEPTION on PR events**: you MAY (and for bug-finding reviews SHOULD) also call mcp__gitea__create_pull_request_review once to file inline per-line comments — see the PR REVIEW PROTOCOL section below.
+- This includes ALL responses: answers to questions, progress updates, and final results.${eventData.isPR ? "\n- PR CRITICAL: After reading files and forming your response, you MUST post it by calling mcp__gitea__update_issue_comment. Do NOT just respond with a normal response, the user will not see it." : ""}
+- You communicate exclusively by editing your single tracking comment plus (on PR events) one inline review — not through any other means.
 - Use this spinner HTML when work is in progress: <img src="https://raw.githubusercontent.com/alessandroferra/claude-code-action/refs/heads/gitea/assets/spinner.gif" width="14px" height="14px" style="vertical-align: middle; margin-left: 4px;" />
 ${eventData.isPR && !eventData.claudeBranch ? `- Always push to the existing branch when triggered on a PR.` : eventData.claudeBranch ? `- IMPORTANT: You are already on the correct branch (${eventData.claudeBranch}). Do not create additional branches.` : `- IMPORTANT: You are currently on the base branch (${eventData.baseBranch}). First check for existing claude branches for this ${eventData.isPR ? "PR" : "issue"} and use them if found, otherwise create a new branch using mcp__local_git_ops__create_branch.`}
+${
+  eventData.isPR
+    ? `
+PR REVIEW PROTOCOL (applies whenever you are reviewing a PR, including PR_opened, a @claude review request, or any PR-targeted analysis):
+
+1. **Summarize in the tracking comment**. Update the existing Claude comment with a brief summary of what you reviewed and your top-level verdict. This is the always-on path.
+
+2. **File inline review comments for every concrete problem you find.** Do not embed bug lists in the tracking comment — they belong on the code. After the summary, make ONE call to mcp__gitea__create_pull_request_review with:
+   - event: "REQUEST_CHANGES" when you found bugs, regressions, security issues, or anything you would block merge for. Otherwise "COMMENT".
+   - body: a one- or two-line review preamble (may be empty if the tracking comment already summarizes).
+   - comments: an array with ONE entry per distinct finding. Each entry:
+     - path: the file path relative to repo root.
+     - new_position: 1-based line number on the NEW (RIGHT) side of the diff for added or unchanged lines you are commenting on.
+     - old_position: 1-based line number on the OLD (LEFT) side of the diff for removed lines you are commenting on.
+     - body: a concise description of the problem AND a concrete suggested fix. Prefer suggestion blocks (\`\`\`suggestion … \`\`\`) when a single-line replacement resolves it.
+
+3. **Only one review call per run.** Build the complete comments[] array and submit once. Do not fan out into multiple reviews.
+
+4. **Do not duplicate inline findings inside the tracking comment.** The tracking comment holds the narrative (what you checked, what you concluded); the inline review holds the actionable per-line feedback. This mirrors the GitHub-native review UX.
+
+5. If you found zero problems worth flagging, skip the create_pull_request_review call entirely and just leave the approving summary in the tracking comment.
+`
+    : ""
+}
 - Use mcp__local_git_ops__commit_files for making commits (works for both new and existing files, single or multiple). Use mcp__local_git_ops__delete_files for deleting files (supports deleting single or multiple files atomically), or mcp__gitea__delete_file for deleting a single file. Edit files locally, and the tool will read the content from the same path on disk.
   Tool usage examples:
   - mcp__local_git_ops__commit_files: {"files": ["path/to/file1.js", "path/to/file2.py"], "message": "feat: add new feature"}
@@ -778,9 +802,9 @@ ${eventData.isPR && !eventData.claudeBranch ? `- Always push to the existing bra
   - mcp__local_git_ops__delete_files: {"files": ["path/to/old.js"], "message": "chore: remove deprecated file"}
 - Display the todo list as a checklist in the Gitea comment and mark things off as you go.
 - All communication must happen through Gitea PR comments.
-- Never create new comments. Only update the existing comment using ${eventData.eventName === "pull_request_review_comment" ? "mcp__gitea__update_pull_request_comment" : "mcp__gitea__update_issue_comment"}.
-- This includes ALL responses: code reviews, answers to questions, progress updates, and final results.${eventData.isPR ? "\n- PR CRITICAL: After reading files and forming your response, you MUST post it by calling mcp__gitea__update_issue_comment. Do NOT just respond with a normal response, the user will not see it." : ""}
-- You communicate exclusively by editing your single comment - not through any other means.
+- Do not create new issue/PR comments. Only update the existing tracking comment using ${eventData.eventName === "pull_request_review_comment" ? "mcp__gitea__update_pull_request_comment" : "mcp__gitea__update_issue_comment"}. The one exception on PR events is mcp__gitea__create_pull_request_review for inline per-line review feedback (see PR REVIEW PROTOCOL above).
+- This includes ALL responses: answers to questions, progress updates, and final results.${eventData.isPR ? "\n- PR CRITICAL: After reading files and forming your response, you MUST post it by calling mcp__gitea__update_issue_comment. Do NOT just respond with a normal response, the user will not see it." : ""}
+- You communicate exclusively by editing your single tracking comment plus (on PR events) one inline review via create_pull_request_review — not through any other means.
 - Use this spinner HTML when work is in progress: <img src="https://github.com/user-attachments/assets/5ac382c7-e004-429b-8e35-7feb3e8f9c6f" width="14px" height="14px" style="vertical-align: middle; margin-left: 4px;" />
 ${eventData.isPR && !eventData.claudeBranch ? `- Always push to the existing branch when triggered on a PR.` : `- IMPORTANT: You are already on the correct branch (${eventData.claudeBranch || "the created branch"}). Never create new branches when triggered on issues or closed/merged PRs.`}
 ${
