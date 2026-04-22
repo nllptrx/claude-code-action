@@ -4,11 +4,30 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "base-action/**"
+      - ".github/workflows/test-claude-env.yml"
+      - "package.json"
+      - "bun.lock"
+      - "tsconfig.json"
   pull_request:
+    paths:
+      - "base-action/**"
+      - ".github/workflows/test-claude-env.yml"
+      - "package.json"
+      - "bun.lock"
+      - "tsconfig.json"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test-claude-env-with-comments:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -19,7 +38,7 @@ jobs:
         with:
           prompt: |
             Use the Bash tool to run: echo "VAR1: $VAR1" && echo "VAR2: $VAR2"
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY && secrets.ANTHROPIC_API_KEY || secrets.CLAUDE_CREDENTIALS }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CREDENTIALS }}
           claude_env: |
             # This is a comment
@@ -28,8 +47,11 @@ jobs:
             VAR2: value2
 
             # Empty lines above should be ignored
-          allowed_tools: "Bash(echo:*)"
-          timeout_minutes: "2"
+          # Upstream removed allowed_tools / timeout_minutes from base-action
+          # inputs; everything now flows through claude_args. Flag is camelCase
+          # to match what test-structured-output.yml uses successfully.
+          claude_args: |
+            --allowedTools Bash
 
       - name: Verify comment handling
         run: |

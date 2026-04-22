@@ -6,32 +6,69 @@ on:
   push:
     branches:
       - main
+  # Paths filter here because workflow_call bypasses the callee's pull_request
+  # paths filter — if ci-all fires on every PR, every test-* sub-workflow runs
+  # regardless of the callee's paths. Mirror the union of their filters so
+  # docs-only PRs skip base-action tests entirely.
   pull_request:
+    paths:
+      - "base-action/**"
+      - ".github/workflows/ci-all.yml"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/test-*.yml"
+      - "package.json"
+      - "bun.lock"
+      - "tsconfig.json"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
+# Shared gate for reusable test-* sub-workflow calls. When secrets are absent
+# (forks, un-configured repos) every called sub-workflow skips all its jobs,
+# which leaves ci-all itself in a degenerate "0 jobs, conclusion=failure"
+# state that doesn't surface on the PR rollup but hides real signal in the
+# Actions tab. Skip the sub-calls at this level instead so ci-all reports
+# only what actually ran (ci.yml).
 jobs:
   ci:
     uses: ./.github/workflows/ci.yml
 
   test-base-action:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/test-base-action.yml
     secrets: inherit # Required for ANTHROPIC_API_KEY
 
   test-custom-executables:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/test-custom-executables.yml
     secrets: inherit
 
   test-mcp-servers:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/test-mcp-servers.yml
     secrets: inherit
 
   test-settings:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/test-settings.yml
     secrets: inherit
 
   test-structured-output:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/test-structured-output.yml
     secrets: inherit

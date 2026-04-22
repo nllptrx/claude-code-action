@@ -2,11 +2,24 @@ name: Test Settings Feature
 
 on:
   pull_request:
+    paths:
+      - "base-action/**"
+      - ".github/workflows/test-settings.yml"
+      - "package.json"
+      - "bun.lock"
+      - "tsconfig.json"
   workflow_dispatch:
   workflow_call:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test-settings-inline-allow:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -17,7 +30,7 @@ jobs:
         with:
           prompt: |
             Use Bash to echo "Hello from settings test"
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY && secrets.ANTHROPIC_API_KEY || secrets.CLAUDE_CREDENTIALS }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CREDENTIALS }}
           settings: |
             {
@@ -25,7 +38,6 @@ jobs:
                 "allow": ["Bash(echo:*)"]
               }
             }
-          timeout_minutes: "2"
 
       - name: Verify echo worked
         run: |
@@ -58,6 +70,9 @@ jobs:
           fi
 
   test-settings-inline-deny:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -68,7 +83,7 @@ jobs:
         with:
           prompt: |
             Use Bash to echo "This should not work"
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY && secrets.ANTHROPIC_API_KEY || secrets.CLAUDE_CREDENTIALS }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CREDENTIALS }}
           settings: |
             {
@@ -76,7 +91,6 @@ jobs:
                 "deny": ["Bash(echo:*)"]
               }
             }
-          timeout_minutes: "2"
 
       - name: Verify echo was denied
         run: |
@@ -92,6 +106,9 @@ jobs:
           fi
 
   test-settings-file-allow:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -112,10 +129,9 @@ jobs:
         with:
           prompt: |
             Use Bash to echo "Hello from settings file test"
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY && secrets.ANTHROPIC_API_KEY || secrets.CLAUDE_CREDENTIALS }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CREDENTIALS }}
           settings: "test-settings.json"
-          timeout_minutes: "2"
 
       - name: Verify echo worked
         run: |
@@ -148,6 +164,9 @@ jobs:
           fi
 
   test-settings-file-deny:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -168,10 +187,9 @@ jobs:
         with:
           prompt: |
             Use Bash to echo "This should not work from file"
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY && secrets.ANTHROPIC_API_KEY || secrets.CLAUDE_CREDENTIALS }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CREDENTIALS }}
           settings: "test-settings.json"
-          timeout_minutes: "2"
 
       - name: Verify echo was denied
         run: |

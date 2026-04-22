@@ -48,6 +48,8 @@ async function run() {
       model: process.env.ANTHROPIC_MODEL,
       pathToClaudeCodeExecutable: claudeExecutable,
       showFullOutput: process.env.INPUT_SHOW_FULL_OUTPUT,
+      // Fork delta: see action.yml claude_env comment.
+      claudeEnv: process.env.INPUT_CLAUDE_ENV,
     });
 
     // Set outputs for the standalone base-action

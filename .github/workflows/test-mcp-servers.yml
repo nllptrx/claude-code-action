@@ -2,11 +2,24 @@ name: Test MCP Servers
 
 on:
   pull_request:
+    paths:
+      - "base-action/**"
+      - ".github/workflows/test-mcp-servers.yml"
+      - "package.json"
+      - "bun.lock"
+      - "tsconfig.json"
   workflow_dispatch:
   workflow_call:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test-mcp-integration:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -26,7 +39,7 @@ jobs:
         id: claude-test
         with:
           prompt: "List all available tools"
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY && secrets.ANTHROPIC_API_KEY || secrets.CLAUDE_CREDENTIALS }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CREDENTIALS }}
         env:
           # Change to test directory so it finds .mcp.json
@@ -77,6 +90,9 @@ jobs:
           echo "✓ All MCP server checks passed!"
 
   test-mcp-config-flag:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -108,9 +124,12 @@ jobs:
         id: claude-config-test
         with:
           prompt: "List all available tools"
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY && secrets.ANTHROPIC_API_KEY || secrets.CLAUDE_CREDENTIALS }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CREDENTIALS }}
-          mcp_config: '{"mcpServers":{"test-server":{"type":"stdio","command":"bun","args":["simple-mcp-server.ts"],"env":{}}}}'
+          # Upstream removed mcp_config as a first-class input; pass via
+          # claude_args instead. Single-quote the JSON body so the shell-quote
+          # parser in parse-sdk-options preserves braces/quotes intact.
+          claude_args: --mcp-config '{"mcpServers":{"test-server":{"type":"stdio","command":"bun","args":["simple-mcp-server.ts"],"env":{}}}}'
         env:
           # Change to test directory so bun can find the MCP server script
           CLAUDE_WORKING_DIR: ${{ github.workspace }}/base-action/test/mcp-test

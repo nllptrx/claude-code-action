@@ -72,6 +72,15 @@ inputs:
     required: false
     default: ""
 
+  # Fork delta: upstream removed claude_env from base-action when switching to
+  # the SDK wrapper, but Gitea workflows and the tag-mode prompt rely on it to
+  # inject per-run KEY: value env pairs (e.g. bot identity, custom endpoints).
+  # Re-declared here so GitHub surfaces it as INPUT_CLAUDE_ENV for run-claude.ts.
+  claude_env:
+    description: "Custom environment variables to pass to Claude Code execution (YAML multiline format, e.g. 'VAR1: value1\nVAR2: value2')"
+    required: false
+    default: ""
+
 outputs:
   conclusion:
     description: "Execution status of Claude Code ('success' or 'failure')"
@@ -171,6 +180,10 @@ runs:
         INPUT_SHOW_FULL_OUTPUT: ${{ inputs.show_full_output }}
         INPUT_PLUGINS: ${{ inputs.plugins }}
         INPUT_PLUGIN_MARKETPLACES: ${{ inputs.plugin_marketplaces }}
+        # Fork delta: composite `run:` steps don't auto-populate INPUT_* vars
+        # from declared inputs; each has to be mapped here explicitly so
+        # index.ts can read it via process.env.INPUT_CLAUDE_ENV.
+        INPUT_CLAUDE_ENV: ${{ inputs.claude_env }}
 
         # Provider configuration
         ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}

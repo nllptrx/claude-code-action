@@ -2,6 +2,12 @@ name: Test Claude Code Action
 
 on:
   pull_request:
+    paths:
+      - "base-action/**"
+      - ".github/workflows/test-base-action.yml"
+      - "package.json"
+      - "bun.lock"
+      - "tsconfig.json"
   workflow_dispatch:
     inputs:
       test_prompt:
@@ -10,8 +16,17 @@ on:
         default: "List the files in the current directory starting with 'package'"
   workflow_call:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test-inline-prompt:
+    # Cost gate: skip on fork PRs (secrets unavailable anyway) and skip cleanly
+    # when CLAUDE_CREDENTIALS / ANTHROPIC_API_KEY is unset so jobs don't fail red.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -21,10 +36,9 @@ jobs:
         uses: ./base-action
         with:
           prompt: ${{ github.event.inputs.test_prompt || 'List the files in the current directory starting with "package"' }}
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY && secrets.ANTHROPIC_API_KEY || secrets.CLAUDE_CREDENTIALS }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CREDENTIALS }}
-          allowed_tools: "LS,Read"
-          timeout_minutes: "3"
+          claude_args: --allowedTools "LS,Read"
 
       - name: Verify inline prompt output
         run: |
@@ -63,6 +77,9 @@ jobs:
           fi
 
   test-prompt-file:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -80,10 +97,9 @@ jobs:
         uses: ./base-action
         with:
           prompt_file: "test-prompt.txt"
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY && secrets.ANTHROPIC_API_KEY || secrets.CLAUDE_CREDENTIALS }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CREDENTIALS }}
-          allowed_tools: "LS,Read"
-          timeout_minutes: "3"
+          claude_args: --allowedTools "LS,Read"
 
       - name: Verify prompt file output
         run: |
