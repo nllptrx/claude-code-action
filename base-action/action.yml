@@ -180,6 +180,10 @@ runs:
         INPUT_SHOW_FULL_OUTPUT: ${{ inputs.show_full_output }}
         INPUT_PLUGINS: ${{ inputs.plugins }}
         INPUT_PLUGIN_MARKETPLACES: ${{ inputs.plugin_marketplaces }}
+        # Fork delta: composite `run:` steps don't auto-populate INPUT_* vars
+        # from declared inputs; each has to be mapped here explicitly so
+        # index.ts can read it via process.env.INPUT_CLAUDE_ENV.
+        INPUT_CLAUDE_ENV: ${{ inputs.claude_env }}
 
         # Provider configuration
         ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
