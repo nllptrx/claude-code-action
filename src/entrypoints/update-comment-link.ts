@@ -286,14 +286,29 @@ async function run() {
       actionFailed = true;
       errorDetails = prepareError;
     } else {
-      // Check for existence of output file and parse it if available
-      try {
-        const outputFile = process.env.OUTPUT_FILE;
-        if (outputFile) {
+      // Parse execution details from the Claude output file when available.
+      // On Gitea runners the file may be missing (e.g., the pinned
+      // claude-code-base-action v0.0.63 depends on `jq`, which isn't in
+      // node:20-bookworm images). That's non-fatal — we just lose the
+      // cost/duration footer. Separate the "missing file" path from
+      // real parse/read errors so a missing file doesn't log an
+      // ugly ENOENT stack.
+      const claudeSuccess = process.env.CLAUDE_SUCCESS !== "false";
+      actionFailed = !claudeSuccess;
+
+      const outputFile = process.env.OUTPUT_FILE;
+      if (outputFile) {
+        try {
+          await fs.access(outputFile);
+        } catch {
+          console.log(
+            `Execution output file not present at ${outputFile}; skipping cost/duration stats. ` +
+              `(Common on Gitea runners when 'jq' is unavailable in the job image.)`,
+          );
+        }
+        try {
           const fileContent = await fs.readFile(outputFile, "utf8");
           const outputData = JSON.parse(fileContent);
-
-          // Output file is an array, get the last element which contains execution details
           if (Array.isArray(outputData) && outputData.length > 0) {
             const lastElement = outputData[outputData.length - 1];
             if (
@@ -308,15 +323,14 @@ async function run() {
               };
             }
           }
+        } catch (error: any) {
+          if (error?.code !== "ENOENT") {
+            console.warn(
+              `Failed to parse execution output file at ${outputFile}:`,
+              error?.message ?? error,
+            );
+          }
         }
-
-        // Check if the Claude action failed
-        const claudeSuccess = process.env.CLAUDE_SUCCESS !== "false";
-        actionFailed = !claudeSuccess;
-      } catch (error) {
-        console.error("Error reading output file:", error);
-        // If we can't read the file, check for any failure markers
-        actionFailed = process.env.CLAUDE_SUCCESS === "false";
       }
     }
 
