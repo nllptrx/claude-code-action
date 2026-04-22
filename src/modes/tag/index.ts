@@ -52,6 +52,15 @@ export async function prepareTagMode({
   });
 
   const branchInfo = await setupBranch(client, githubData, context);
+  // Emit at resolution site, same pattern as claude_comment_id: any later
+  // failure in this function still gives update-comment-link the right
+  // branch instead of falling back to "main".
+  if (branchInfo.baseBranch) {
+    core.setOutput("BASE_BRANCH", branchInfo.baseBranch);
+  }
+  if (branchInfo.claudeBranch) {
+    core.setOutput("CLAUDE_BRANCH", branchInfo.claudeBranch);
+  }
 
   if (branchInfo.claudeBranch) {
     await updateTrackingComment(

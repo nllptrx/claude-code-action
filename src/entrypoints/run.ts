@@ -267,14 +267,19 @@ async function run() {
     baseBranch = prepareResult.branchInfo.baseBranch;
     prepareCompleted = true;
 
-    // claude_comment_id is emitted inside prepareTagMode at the creation
-    // site so later failures still let update-comment-link rewrite the
-    // placeholder into an error link.
-    if (baseBranch) {
-      core.setOutput("BASE_BRANCH", baseBranch);
-    }
-    if (claudeBranch) {
-      core.setOutput("CLAUDE_BRANCH", claudeBranch);
+    // claude_comment_id / BASE_BRANCH / CLAUDE_BRANCH are emitted inside
+    // prepareTagMode at their resolution sites so later failures still give
+    // update-comment-link correct state. Agent mode emits here (no
+    // tracking comment to rescue); only mcp_config is always-safe-to-defer
+    // since it's the last thing built.
+    if (prepareResult.commentId === undefined) {
+      // agent mode path: emit branch outputs from the returned result.
+      if (baseBranch) {
+        core.setOutput("BASE_BRANCH", baseBranch);
+      }
+      if (claudeBranch) {
+        core.setOutput("CLAUDE_BRANCH", claudeBranch);
+      }
     }
     core.setOutput("mcp_config", prepareResult.mcpConfig);
 
@@ -365,13 +370,23 @@ async function run() {
     let timeoutHandle: NodeJS.Timeout | undefined;
     if (timeoutMinutes > 0) {
       timeoutHandle = setTimeout(
-        () => {
+        async () => {
           core.setFailed(
             `Claude execution exceeded timeout_minutes=${timeoutMinutes}`,
           );
           const sdkOutFile = `${process.env.RUNNER_TEMP || "/tmp"}/claude-execution-output.json`;
           if (existsSync(sdkOutFile)) {
             core.setOutput("execution_file", sdkOutFile);
+            // Write the step summary here too — process.exit bypasses the
+            // outer finally, so display_report on timeouts would otherwise
+            // be silently lost.
+            if (process.env.DISPLAY_REPORT !== "false") {
+              try {
+                await writeStepSummary(sdkOutFile);
+              } catch (e) {
+                console.error("Failed to write step summary on timeout:", e);
+              }
+            }
           }
           core.setOutput("conclusion", "failure");
           core.setOutput("claude_success", "false");
