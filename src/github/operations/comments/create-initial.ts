@@ -1,8 +1,14 @@
 #!/usr/bin/env bun
 
 /**
- * Create the initial tracking comment when Claude Code starts working
- * This comment shows the working status and includes a link to the job run
+ * Create (or reset) the tracking comment when Claude Code starts working.
+ *
+ * On first run for an entity we POST a fresh comment. On subsequent runs
+ * we locate the prior Claude tracking comment and PATCH its body back to
+ * the "Claude Code is working…" placeholder, so Claude never sees the
+ * previous run's bug list / stale job link as reference material in
+ * `fetchGitHubData`. Fixes the duplicate-findings + stale-run-link
+ * issue that surfaced during PR review E2E validation (PR #5 run #13).
  */
 
 import { appendFileSync } from "fs";
@@ -20,6 +26,20 @@ import type { GiteaApiClient } from "../../api/gitea-client";
 // Remove this once Gitea supports HTML rendering in comment previews.
 const PREVIEW_PLACEHOLDER = "Claude Code response preview is available";
 
+/**
+ * Match a Claude-authored tracking comment by looking for the stable
+ * header strings we emit. Covers the "working" and "finished" / "error"
+ * states so a run triggered while a prior one is still in-flight (rare)
+ * or after completion both reuse the same id.
+ */
+function isClaudeTrackingComment(body: string | undefined | null): boolean {
+  if (!body) return false;
+  return (
+    body.includes("Claude Code is working") ||
+    /\*\*Claude (finished|encountered an error)/.test(body)
+  );
+}
+
 export async function createInitialComment(
   api: GiteaApiClient,
   context: ParsedGitHubContext,
@@ -30,37 +50,65 @@ export async function createInitialComment(
   const workingBody = createCommentBody(jobRunLink);
 
   try {
-    let response;
+    let commentId: number | undefined;
 
     console.log(
-      `Creating comment for ${context.isPR ? "PR" : "issue"} #${context.entityNumber}`,
+      `Creating/resetting tracking comment for ${context.isPR ? "PR" : "issue"} #${context.entityNumber}`,
     );
     console.log(`Repository: ${owner}/${repo}`);
 
-    // Only use createReplyForReviewComment if it's a PR review comment AND we have a comment_id
+    // PR review comments are their own thread (replies to a specific
+    // code-line comment); no reuse — always post a fresh placeholder.
     if (isPullRequestReviewCommentEvent(context)) {
       console.log(`Creating PR review comment reply`);
-      response = await api.customRequest(
+      const response = await api.customRequest(
         "POST",
         `/repos/${owner}/${repo}/pulls/${context.entityNumber}/comments/${context.payload.comment.id}/replies`,
-        {
-          body: PREVIEW_PLACEHOLDER,
-        },
+        { body: PREVIEW_PLACEHOLDER },
       );
+      commentId = response.data.id;
     } else {
-      // For all other cases (issues, issue comments, or missing comment_id)
-      console.log(`Creating issue comment via API`);
-      response = await api.createIssueComment(
-        owner,
-        repo,
-        context.entityNumber,
-        PREVIEW_PLACEHOLDER,
-      );
+      // Issue / issue_comment / PR events: look for the most recent
+      // Claude-authored tracking comment and reset its body instead of
+      // spawning a new one. Without this, Claude on a re-trigger would
+      // see the prior run's full review body in the comments list and
+      // carry its content (including stale run links) into the new run.
+      const existing = await api
+        .listIssueComments(owner, repo, context.entityNumber)
+        .catch((err) => {
+          console.warn(
+            `Could not list prior comments (will POST a fresh one): ${err}`,
+          );
+          return { data: [] as Array<{ id: number; body?: string }> };
+        });
+
+      const prior = [...(existing.data || [])]
+        .reverse()
+        .find((c) => isClaudeTrackingComment(c.body));
+
+      if (prior && prior.id) {
+        console.log(
+          `Reusing prior Claude tracking comment ${prior.id} (resetting to working state)`,
+        );
+        commentId = prior.id;
+      } else {
+        console.log(`No prior tracking comment found; creating a new one`);
+        const response = await api.createIssueComment(
+          owner,
+          repo,
+          context.entityNumber,
+          PREVIEW_PLACEHOLDER,
+        );
+        commentId = response.data.id;
+      }
     }
 
-    const commentId = response.data.id;
+    if (commentId === undefined) {
+      throw new Error("Failed to obtain tracking comment id");
+    }
 
-    // Immediately edit the comment to the actual working status body
+    // Always PATCH the body to the fresh working state — covers both
+    // newly-created comments and reused prior ones.
     await api.updateIssueComment(owner, repo, commentId, workingBody);
 
     // Output the comment ID for downstream steps using GITHUB_OUTPUT
