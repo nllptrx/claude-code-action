@@ -286,8 +286,11 @@ runs:
         APPEND_SYSTEM_PROMPT: ${{ inputs.append_system_prompt }}
         FALLBACK_MODEL: ${{ inputs.fallback_model }}
         CLAUDE_ENV: ${{ inputs.claude_env }}
-        USE_BEDROCK: ${{ inputs.use_bedrock }}
-        USE_VERTEX: ${{ inputs.use_vertex }}
+        # Base-action's validateEnvironmentVariables keys off the
+        # CLAUDE_CODE_USE_* vars, not the unprefixed names. Only set them when
+        # truthy; any non-empty value (even "false") flips the provider check.
+        CLAUDE_CODE_USE_BEDROCK: ${{ inputs.use_bedrock == 'true' && '1' || '' }}
+        CLAUDE_CODE_USE_VERTEX: ${{ inputs.use_vertex == 'true' && '1' || '' }}
         USE_NODE_CACHE: ${{ inputs.use_node_cache }}
 
         # --- new local-base-action inputs (activated by this migration) ---

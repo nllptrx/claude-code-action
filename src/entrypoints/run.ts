@@ -209,10 +209,16 @@ async function run() {
     const modeName = context.inputs.mode;
     console.log(`Using configured mode: ${modeName}`);
 
+    // Agent mode activates when the user supplies direct_prompt or
+    // override_prompt (what createAgentPrompt actually consumes).
+    // Checking context.inputs.prompt here would falsely trigger on runs that
+    // can't produce a prompt file — then createAgentPrompt would throw.
     const containsTrigger =
       modeName === "tag"
         ? isEntityContext(context) && checkContainsTrigger(context)
-        : !!context.inputs?.prompt;
+        : !!(
+            context.inputs.directPrompt || context.inputs.overridePrompt
+          );
     core.setOutput("contains_trigger", containsTrigger.toString());
 
     // Emit bot noreply outputs regardless of trigger — harmless when unused
@@ -288,11 +294,31 @@ async function run() {
       `${process.env.RUNNER_TEMP || "/tmp"}/claude-prompts/claude-prompt.txt`;
     const promptConfig = await preparePrompt({ prompt: "", promptFile });
 
-    const claudeResult = await runClaude(promptConfig.path, {
+    // parseSdkOptions only picks up --mcp-config from the claudeArgs string
+    // (options.mcpConfig is ignored), so embed it as a CLI flag. Prepending
+    // lets user-supplied claudeArgs override / supplement via accumulate.
+    const escapedMcpConfig = prepareResult.mcpConfig.replace(/'/g, "'\\''");
+    const userClaudeArgs = process.env.CLAUDE_ARGS || "";
+    const claudeArgs = [
+      `--mcp-config '${escapedMcpConfig}'`,
+      userClaudeArgs,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    // Execution-file path is a constant the SDK writes BEFORE throwing on
+    // failure. Capture it up-front so a thrown runClaudeWithSdk still leaves
+    // the log attached for update-comment-link / step summary.
+    const sdkExecutionFile = `${process.env.RUNNER_TEMP || "/tmp"}/claude-execution-output.json`;
+
+    // SDK path has no native per-invocation timeout; keep the published
+    // `timeout_minutes` input honored by racing against a deadline.
+    const runClaudeCall = runClaude(promptConfig.path, {
+      claudeArgs,
       allowedTools: process.env.ALLOWED_TOOLS,
       disallowedTools: process.env.DISALLOWED_TOOLS,
       maxTurns: process.env.MAX_TURNS,
-      mcpConfig: prepareResult.mcpConfig,
       systemPrompt: process.env.SYSTEM_PROMPT,
       appendSystemPrompt: process.env.APPEND_SYSTEM_PROMPT,
       fallbackModel: process.env.FALLBACK_MODEL,
@@ -300,20 +326,55 @@ async function run() {
       pathToClaudeCodeExecutable: claudeExecutable,
       showFullOutput: process.env.INPUT_SHOW_FULL_OUTPUT,
     });
+    const timeoutMinutesRaw = process.env.TIMEOUT_MINUTES ?? "";
+    const timeoutMinutes = parseInt(timeoutMinutesRaw, 10);
+    const claudeInvocation =
+      Number.isFinite(timeoutMinutes) && timeoutMinutes > 0
+        ? Promise.race([
+            runClaudeCall,
+            new Promise<never>((_, reject) =>
+              setTimeout(
+                () =>
+                  reject(
+                    new Error(
+                      `Claude execution exceeded timeout_minutes=${timeoutMinutes}`,
+                    ),
+                  ),
+                timeoutMinutes * 60 * 1000,
+              ).unref(),
+            ),
+          ])
+        : runClaudeCall;
 
-    claudeSuccess = claudeResult.conclusion === "success";
-    executionFile = claudeResult.executionFile;
+    try {
+      const claudeResult = await claudeInvocation;
 
-    if (claudeResult.executionFile) {
-      core.setOutput("execution_file", claudeResult.executionFile);
+      claudeSuccess = claudeResult.conclusion === "success";
+      executionFile = claudeResult.executionFile ?? sdkExecutionFile;
+
+      if (executionFile) {
+        core.setOutput("execution_file", executionFile);
+      }
+      if (claudeResult.sessionId) {
+        core.setOutput("session_id", claudeResult.sessionId);
+      }
+      if (claudeResult.structuredOutput) {
+        core.setOutput("structured_output", claudeResult.structuredOutput);
+      }
+      core.setOutput("conclusion", claudeResult.conclusion);
+    } catch (sdkError) {
+      // runClaudeWithSdk throws on non-success results AFTER writing the
+      // execution file. Re-throw to propagate the failure, but first record
+      // the execution file path so the step-summary and follow-up comment
+      // keep the debug log.
+      claudeSuccess = false;
+      if (existsSync(sdkExecutionFile)) {
+        executionFile = sdkExecutionFile;
+        core.setOutput("execution_file", sdkExecutionFile);
+      }
+      core.setOutput("conclusion", "failure");
+      throw sdkError;
     }
-    if (claudeResult.sessionId) {
-      core.setOutput("session_id", claudeResult.sessionId);
-    }
-    if (claudeResult.structuredOutput) {
-      core.setOutput("structured_output", claudeResult.structuredOutput);
-    }
-    core.setOutput("conclusion", claudeResult.conclusion);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     if (!prepareCompleted) {
