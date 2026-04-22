@@ -132,6 +132,30 @@ async function writeStepSummary(executionFile: string): Promise<void> {
 }
 
 /**
+ * Build the claudeArgs string passed to the base-action SDK wrapper.
+ *
+ * `parseSdkOptions` only extracts `--mcp-config` from the claudeArgs string
+ * (the separate `options.mcpConfig` field is ignored), so we have to embed
+ * the action-generated MCP config (gitea / local_git_ops servers) as a CLI
+ * flag at the head of the string. User-supplied `CLAUDE_ARGS` is appended;
+ * if they also pass `--mcp-config`, parseSdkOptions' mergeMcpConfigs
+ * combines both server dicts.
+ *
+ * Exported for testing.
+ */
+export function buildClaudeArgs(
+  mcpConfig: string,
+  userClaudeArgs: string | undefined,
+): string {
+  const escaped = mcpConfig.replace(/'/g, "'\\''");
+  const parts = [`--mcp-config '${escaped}'`];
+  if (userClaudeArgs && userClaudeArgs.trim()) {
+    parts.push(userClaudeArgs.trim());
+  }
+  return parts.join(" ");
+}
+
+/**
  * Emit Gitea bot noreply email outputs when bot_id/bot_name are set,
  * so downstream steps (e.g. checkout with persist-credentials) can pick up
  * the same commit identity `configureGitAuth` writes to git config.
@@ -294,18 +318,10 @@ async function run() {
       `${process.env.RUNNER_TEMP || "/tmp"}/claude-prompts/claude-prompt.txt`;
     const promptConfig = await preparePrompt({ prompt: "", promptFile });
 
-    // parseSdkOptions only picks up --mcp-config from the claudeArgs string
-    // (options.mcpConfig is ignored), so embed it as a CLI flag. Prepending
-    // lets user-supplied claudeArgs override / supplement via accumulate.
-    const escapedMcpConfig = prepareResult.mcpConfig.replace(/'/g, "'\\''");
-    const userClaudeArgs = process.env.CLAUDE_ARGS || "";
-    const claudeArgs = [
-      `--mcp-config '${escapedMcpConfig}'`,
-      userClaudeArgs,
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .trim();
+    const claudeArgs = buildClaudeArgs(
+      prepareResult.mcpConfig,
+      process.env.CLAUDE_ARGS,
+    );
 
     // Execution-file path is a constant the SDK writes BEFORE throwing on
     // failure. Capture it up-front so a thrown runClaudeWithSdk still leaves
