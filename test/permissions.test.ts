@@ -238,4 +238,25 @@ describe("checkWritePermissions", () => {
       expect(result).toBe(true);
     });
   });
+
+  describe("repo owner short-circuit", () => {
+    test("allows actor when it matches repository.owner without calling the API", async () => {
+      // baseContext has actor "tester" and owner "owner"; construct one where
+      // actor equals owner to exercise the short-circuit.
+      const ownerContext = {
+        ...baseContext,
+        actor: "owner",
+      };
+      const mockApi = {
+        getCollaboratorPermission: async () => {
+          throw new Error("should not be called");
+        },
+        getRepo: async () => {
+          throw new Error("should not be called");
+        },
+      } as any;
+      const result = await checkWritePermissions(mockApi, ownerContext);
+      expect(result).toBe(true);
+    });
+  });
 });

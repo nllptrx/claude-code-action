@@ -68,6 +68,15 @@ export async function checkWritePermissions(
     return true;
   }
 
+  // Repo owner short-circuit. Gitea's collaborator endpoint returns 403 for
+  // the owner's own lookup because owners aren't stored in the collaborators
+  // table ("collaborators can query only their own"). The owner obviously
+  // has write, so skip the API call entirely.
+  if (actor === repository.owner) {
+    core.info(`Actor ${actor} is the repository owner`);
+    return true;
+  }
+
   // Primary check: Gitea collaborator permission endpoint.
   try {
     const resp = await api.getCollaboratorPermission(
