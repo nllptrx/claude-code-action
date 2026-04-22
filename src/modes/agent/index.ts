@@ -7,6 +7,7 @@ import { checkHumanActor } from "../../github/validation/actor";
 import { createAgentPrompt, configureTools } from "../../create-prompt";
 import { fetchGitHubData } from "../../github/data/fetcher";
 import { isEntityContext } from "../../github/context";
+import { setupBranch } from "../../github/operations/branch";
 import type { GitHubContext } from "../../github/context";
 import type { GitHubClient } from "../../github/api/client";
 
@@ -66,32 +67,46 @@ export async function prepareAgentMode({
     // Continue anyway — git operations may still work with default config
   }
 
-  // Entity-triggered agent runs (issue/PR events with `mode: agent` + an
-  // override_prompt) need githubData so substitutePromptVariables can expand
-  // $PR_NUMBER, $CHANGED_FILES, etc. Automation events (workflow_dispatch,
-  // schedule) have no entity to fetch, so undefined is correct there.
-  const githubData = isEntityContext(context)
-    ? await fetchGitHubData({
-        client,
-        repository: `${context.repository.owner}/${context.repository.repo}`,
-        prNumber: context.entityNumber.toString(),
-        isPR: context.isPR,
-        includeCommentsByActor: context.inputs.includeCommentsByActor || "",
-        excludeCommentsByActor: context.inputs.excludeCommentsByActor || "",
-      })
-    : undefined;
+  // Entity-triggered agent runs (issue/PR events with `mode: agent`) still
+  // need setupBranch: it ensures a claude-branch exists and the checkout
+  // points at it, so Claude's local git tools commit/push to the right
+  // place. Fetch data first (also used for override_prompt variable
+  // substitution); automation events skip both.
+  let githubData:
+    | Awaited<ReturnType<typeof fetchGitHubData>>
+    | undefined;
+  let baseBranch: string;
+  let currentBranch: string;
+  let claudeBranch: string | undefined;
+
+  if (isEntityContext(context)) {
+    githubData = await fetchGitHubData({
+      client,
+      repository: `${context.repository.owner}/${context.repository.repo}`,
+      prNumber: context.entityNumber.toString(),
+      isPR: context.isPR,
+      includeCommentsByActor: context.inputs.includeCommentsByActor || "",
+      excludeCommentsByActor: context.inputs.excludeCommentsByActor || "",
+    });
+
+    const branchInfo = await setupBranch(client, githubData, context);
+    baseBranch = branchInfo.baseBranch;
+    currentBranch = branchInfo.currentBranch;
+    claudeBranch = branchInfo.claudeBranch;
+  } else {
+    // Automation events (workflow_dispatch, schedule, workflow_run).
+    const defaultBranch = context.repository.default_branch || "main";
+    baseBranch = context.inputs.baseBranch || defaultBranch;
+    claudeBranch = process.env.CLAUDE_BRANCH || undefined;
+    currentBranch =
+      claudeBranch ||
+      process.env.GITHUB_HEAD_REF ||
+      process.env.GITHUB_REF_NAME ||
+      defaultBranch;
+  }
 
   await createAgentPrompt(githubData, context);
   configureTools(context);
-
-  const claudeBranch = process.env.CLAUDE_BRANCH || undefined;
-  const defaultBranch = context.repository.default_branch || "main";
-  const baseBranch = context.inputs.baseBranch || defaultBranch;
-  const currentBranch =
-    claudeBranch ||
-    process.env.GITHUB_HEAD_REF ||
-    process.env.GITHUB_REF_NAME ||
-    defaultBranch;
 
   const mcpConfig = await prepareMcpConfig({
     githubToken,

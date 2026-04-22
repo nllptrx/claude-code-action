@@ -334,6 +334,11 @@ async function run() {
     // cancellation API, so a Promise.race alone would only reject the outer
     // await while the generator keeps running. Force a process exit so the
     // runner reaps the step — matches the v0.0.63 subprocess semantics.
+    //
+    // `process.exit` bypasses the outer try/finally, so emit every output
+    // update-comment-link + the step summary rely on BEFORE exiting:
+    // conclusion, execution_file (SDK wrote it on its way to the timeout),
+    // branch_name, claude_success, prepare_success.
     const timeoutMinutes = parseInt(process.env.TIMEOUT_MINUTES ?? "", 10);
     let timeoutHandle: NodeJS.Timeout | undefined;
     if (Number.isFinite(timeoutMinutes) && timeoutMinutes > 0) {
@@ -342,7 +347,14 @@ async function run() {
           core.setFailed(
             `Claude execution exceeded timeout_minutes=${timeoutMinutes}`,
           );
+          const sdkOutFile = `${process.env.RUNNER_TEMP || "/tmp"}/claude-execution-output.json`;
+          if (existsSync(sdkOutFile)) {
+            core.setOutput("execution_file", sdkOutFile);
+          }
           core.setOutput("conclusion", "failure");
+          core.setOutput("claude_success", "false");
+          core.setOutput("prepare_success", "true");
+          core.setOutput("branch_name", claudeBranch ?? "");
           // Exit code 124 matches `timeout(1)` and the previous CLI path.
           process.exit(124);
         },

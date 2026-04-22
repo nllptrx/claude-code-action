@@ -59,7 +59,13 @@ export async function configureGitAuth(
   //  2. `bot_id` / `bot_name` action inputs (via getBotUserFromInputs) —
   //     lets maintainers pin the action to a specific bot account without
   //     touching the caller.
-  //  3. Hard-coded github-actions[bot] fallback (legacy behavior).
+  //  3. `claude_git_name` / `claude_git_email` action inputs (exposed as the
+  //     CLAUDE_GIT_NAME / CLAUDE_GIT_EMAIL env vars). Before the unified
+  //     entrypoint, these were only honored by ensureGitUserConfigured in
+  //     local-git-ops-server, which skips when config is already set —
+  //     calling configureGitAuth earlier now would otherwise strand the
+  //     inputs, so honor them here.
+  //  4. Hard-coded github-actions[bot] fallback (legacy behavior).
   console.log("Configuring git user...");
   const resolvedUser = user ?? getBotUserFromInputs(context);
   if (resolvedUser) {
@@ -69,9 +75,15 @@ export async function configureGitAuth(
     await $`git config user.name "${botName}"`;
     await $`git config user.email "${botId}+${botName}@${noreplyDomain}"`;
     console.log(`✓ Set git user as ${botName}`);
+  } else if (process.env.CLAUDE_GIT_NAME || process.env.CLAUDE_GIT_EMAIL) {
+    const gitName = process.env.CLAUDE_GIT_NAME || "Claude";
+    const gitEmail = process.env.CLAUDE_GIT_EMAIL || "claude@anthropic.com";
+    console.log(`Setting git user from claude_git_* inputs: ${gitName}`);
+    await $`git config user.name "${gitName}"`;
+    await $`git config user.email "${gitEmail}"`;
   } else {
     console.log(
-      "No user data in comment and no bot_id/bot_name set, using default bot user",
+      "No user data in comment, no bot_id/bot_name, no claude_git_*; using default bot user",
     );
     await $`git config user.name "github-actions[bot]"`;
     await $`git config user.email "41898282+github-actions[bot]@${noreplyDomain}"`;
