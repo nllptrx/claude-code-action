@@ -74,6 +74,35 @@ describe("updateCommentBody", () => {
       expect(errorIndex).toBeGreaterThan(headerIndex);
     });
 
+    it("strips the 'I'll analyze this…' placeholder from the initial body", () => {
+      const input = {
+        ...baseInput,
+        currentBody:
+          "Claude Code is working… <img src='spinner.gif' />\n\nI'll analyze this and get back to you.\n\n[View job run](http://x)",
+        actionFailed: true,
+      };
+
+      const result = updateCommentBody(input);
+      // Placeholder prose must be gone — otherwise the terminal comment
+      // contradicts itself ("encountered an error" + "I'll get back to you").
+      expect(result).not.toContain("I'll analyze this and get back to you");
+    });
+
+    it("surfaces a fallback pointer when Claude fails with no errorDetails", () => {
+      const input = {
+        ...baseInput,
+        currentBody: "Claude Code is working…",
+        actionFailed: true,
+        // errorDetails omitted — mirrors the validateEnvironmentVariables
+        // failure path where the base-action throws before a PREPARE_ERROR
+        // is captured.
+      };
+
+      const result = updateCommentBody(input);
+      expect(result).toContain("**Claude encountered an error**");
+      expect(result).toContain("See the job log for details.");
+    });
+
     it("handles username extraction from content when not provided", () => {
       const input = {
         ...baseInput,

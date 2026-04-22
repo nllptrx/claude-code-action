@@ -79,10 +79,16 @@ export function updateCommentBody(input: CommentUpdateInput): string {
     errorDetails,
   } = input;
 
-  // Extract content from the original comment body
-  // First, remove the "Claude Code is working…" or "Claude Code is working..." message
+  // Extract content from the original comment body. Strip the working
+  // spinner line AND the prose placeholder — otherwise the terminal
+  // comment shows "Claude encountered an error" next to "I'll analyze
+  // this and get back to you." which reads as contradictory.
   const workingPattern = /Claude Code is working[…\.]{1,3}(?:\s*<img[^>]*>)?/i;
-  let bodyContent = originalBody.replace(workingPattern, "").trim();
+  const placeholderPattern = /I'?ll analyze this and get back to you\.?/i;
+  let bodyContent = originalBody
+    .replace(workingPattern, "")
+    .replace(placeholderPattern, "")
+    .trim();
 
   // Check if there's a PR link in the content
   let prLinkFromContent = "";
@@ -190,9 +196,16 @@ export function updateCommentBody(input: CommentUpdateInput): string {
   // Build the new body with blank line between header and separator
   let newBody = `${header}${links}`;
 
-  // Add error details if available
-  if (actionFailed && errorDetails) {
-    newBody += `\n\n\`\`\`\n${errorDetails}\n\`\`\``;
+  // Add error details if available. Without this fallback, Claude-side
+  // failures with no structured error (e.g. validateEnvironmentVariables
+  // throwing inside base-action before a prompt runs) left the comment
+  // saying only "Claude encountered an error" with no hint where to look.
+  if (actionFailed) {
+    if (errorDetails) {
+      newBody += `\n\n\`\`\`\n${errorDetails}\n\`\`\``;
+    } else {
+      newBody += `\n\nSee the job log for details.`;
+    }
   }
 
   newBody += `\n\n---\n`;
