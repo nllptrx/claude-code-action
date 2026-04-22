@@ -37,8 +37,36 @@ export async function checkHumanActor(
     console.log(`Actor type: ${actorType}`);
 
     if (actorType !== "User") {
+      // Ported from upstream's checkHumanActor: honor allowed_bots for
+      // non-User actors. GitHub-only — Gitea's User struct has no `type`
+      // field so this branch isn't reachable in Gitea mode (which early-
+      // returns above). The allowlist still applies if someone runs this
+      // action against github.com.
+      const allowedBots = githubContext.inputs.allowedBots ?? "";
+      if (allowedBots.trim() === "*") {
+        console.log(
+          `All bots are allowed (allowed_bots='*'), skipping human actor check for: ${githubContext.actor}`,
+        );
+        return;
+      }
+      const allowedBotsList = allowedBots
+        .split(",")
+        .map((bot) =>
+          bot
+            .trim()
+            .toLowerCase()
+            .replace(/\[bot\]$/, ""),
+        )
+        .filter((bot) => bot.length > 0);
+      const botName = githubContext.actor.toLowerCase().replace(/\[bot\]$/, "");
+      if (allowedBotsList.includes(botName)) {
+        console.log(
+          `Bot ${botName} is in allowed_bots list, skipping human actor check`,
+        );
+        return;
+      }
       throw new Error(
-        `Workflow initiated by non-human actor: ${githubContext.actor} (type: ${actorType}).`,
+        `Workflow initiated by non-human actor: ${githubContext.actor} (type: ${actorType}). Add bot to allowed_bots list or use '*' to allow all bots.`,
       );
     }
 

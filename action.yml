@@ -71,6 +71,14 @@ inputs:
       (e.g., issue labeling).
     required: false
     default: ""
+  allowed_bots:
+    description: "Comma-separated list of allowed bot usernames, or '*' to allow all bots. Empty string (default) allows no bots. Gitea's User API doesn't expose a bot type, so this is only consulted when the action runs against github.com (fallback path)."
+    required: false
+    default: ""
+  include_fix_links:
+    description: "Include 'Fix this →' links in PR code review feedback that open Claude Code with context to fix the identified issue."
+    required: false
+    default: "true"
 
   # New Claude Code settings
   settings:
@@ -219,6 +227,8 @@ runs:
         BRANCH_NAME_TEMPLATE: ${{ inputs.branch_name_template }}
         SSH_SIGNING_KEY: ${{ inputs.ssh_signing_key }}
         ALLOWED_NON_WRITE_USERS: ${{ inputs.allowed_non_write_users }}
+        ALLOWED_BOTS: ${{ inputs.allowed_bots }}
+        INCLUDE_FIX_LINKS: ${{ inputs.include_fix_links }}
         ADDITIONAL_PERMISSIONS: ${{ inputs.additional_permissions }}
         INCLUDE_COMMENTS_BY_ACTOR: ${{ inputs.include_comments_by_actor }}
         EXCLUDE_COMMENTS_BY_ACTOR: ${{ inputs.exclude_comments_by_actor }}

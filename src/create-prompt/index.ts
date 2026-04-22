@@ -195,6 +195,9 @@ export function prepareContext(
     }),
     ...(directPrompt && { directPrompt }),
     ...(overridePrompt && { overridePrompt }),
+    ...(context.inputs.includeFixLinks !== undefined && {
+      includeFixLinks: context.inputs.includeFixLinks,
+    }),
     ...(claudeBranch && { claudeBranch }),
   };
 
@@ -693,7 +696,13 @@ ${
         - Reference specific code sections with file paths and line numbers${eventData.isPR ? "\n      - AFTER reading files and analyzing code, you MUST call mcp__gitea__update_issue_comment to post your review" : ""}
       - Formulate a concise, technical, and helpful response based on the context.
       - Reference specific code with inline formatting or code blocks.
-      - Include relevant file paths and line numbers when applicable.
+      - Include relevant file paths and line numbers when applicable.${
+        eventData.isPR && context.includeFixLinks !== false
+          ? `
+      - When identifying issues that could be fixed, include an inline link: [Fix this →](https://claude.ai/code?q=<URI_ENCODED_INSTRUCTIONS>&repo=${context.repository})
+        The query should be URI-encoded and include enough context for Claude Code to understand and fix the issue (file path, line numbers, branch name, what needs to change).`
+          : ""
+      }
       - ${eventData.isPR ? "IMPORTANT: Submit your review feedback by updating the Claude comment. This will be displayed as your PR review." : "Remember that this feedback must be posted to the Gitea comment."}
 
    B. For Straightforward Changes:
