@@ -320,7 +320,10 @@ export function prepareContext(
           ...(assigneeTrigger && { assigneeTrigger }),
           ...(claudeBranch && { claudeBranch }),
         };
-      } else if (eventAction === "labeled") {
+      } else if (eventAction === "labeled" || eventAction === "label_updated") {
+        // Gitea emits "label_updated" for both add/remove. Normalize to
+        // "labeled" in the prepared context so downstream consumers (prompt
+        // templates, type narrowing) only see one shape.
         if (!labelTrigger) {
           throw new Error("LABEL_TRIGGER is required for issue labeled event");
         }
@@ -415,6 +418,8 @@ export function getEventTypeAndContext(envVars: PreparedContext): {
               : `edited issue with '${envVars.triggerPhrase}' in body`,
         };
       } else if (eventData.eventAction === "labeled") {
+        // Note: Gitea's "label_updated" is normalized to "labeled" in
+        // prepareContext(), so this branch covers both upstream paths.
         return {
           eventType: "ISSUE_LABELED",
           triggerContext: `issue labeled with '${eventData.labelTrigger}'`,
