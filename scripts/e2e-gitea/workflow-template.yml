@@ -5,6 +5,10 @@ on:
     types: [created]
   issues:
     types: [opened, assigned, labeled, edited]
+  pull_request:
+    types: [review_requested]
+  pull_request_review_comment:
+    types: [created]
 
 jobs:
   claude:
@@ -13,7 +17,9 @@ jobs:
     # on a no-op. Match the trigger detection the action itself performs.
     if: |
       (github.event_name == 'issues') ||
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '${TRIGGER_PHRASE}'))
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '${TRIGGER_PHRASE}')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'review_requested') ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '${TRIGGER_PHRASE}'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
