@@ -36,7 +36,7 @@ inputs:
     description: "DEPRECATED: Use 'model' instead. Model to use (provider-specific format required for Bedrock/Vertex)"
     required: false
   allowed_tools:
-    description: "Additional tools for Claude to use (the base GitHub tools will always be included)"
+    description: "Additional tools for Claude to use (the base Gitea + local-git-ops MCP tools will always be included)"
     required: false
     default: ""
   disallowed_tools:
