@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { prepareMcpConfig } from "../src/mcp/install-mcp-server";
+import { createMockContext } from "./mockContext";
 
 const originalEnv = { ...process.env };
 
@@ -55,5 +56,38 @@ describe("prepareMcpConfig", () => {
 
     const parsed = JSON.parse(result);
     expect(parsed.mcpServers.gitea.env.REPO_DIR).toBe(process.cwd());
+  });
+
+  test("does not register gitea_actions when context is not a PR", async () => {
+    const context = createMockContext({ isPR: false });
+
+    const result = await prepareMcpConfig({
+      githubToken: "token",
+      owner: "owner",
+      repo: "repo",
+      branch: "branch",
+      context,
+    });
+
+    const parsed = JSON.parse(result);
+    expect(parsed.mcpServers.gitea_actions).toBeUndefined();
+  });
+
+  test("does not register gitea_actions when additional_permissions is empty", async () => {
+    const context = createMockContext({
+      isPR: true,
+      inputs: { additionalPermissions: new Map() } as any,
+    });
+
+    const result = await prepareMcpConfig({
+      githubToken: "token",
+      owner: "owner",
+      repo: "repo",
+      branch: "branch",
+      context,
+    });
+
+    const parsed = JSON.parse(result);
+    expect(parsed.mcpServers.gitea_actions).toBeUndefined();
   });
 });

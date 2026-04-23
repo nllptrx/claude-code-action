@@ -359,7 +359,9 @@ This action is built specifically for Gitea environments with local git operatio
 
 ### Additional Permissions for CI/CD Integration
 
-The `additional_permissions` input allows Claude to access workflow/CI run information when you grant the necessary permissions. This is particularly useful for analyzing CI failures and debugging workflow issues. Works on both Gitea Actions and GitHub Actions — the underlying API surface is compatible.
+The `additional_permissions` input allows Claude to access workflow/CI run information when you grant the necessary permissions. This is particularly useful for analyzing CI failures and debugging workflow issues.
+
+> **Gitea-only in this fork.** The CI introspection tools target Gitea's `/api/v1/repos/.../actions/tasks` surface, which is named and shaped differently from GitHub's Actions API. Running against `github.com` will log a warning and skip MCP server registration — `get_ci_status` / `download_job_log` / `get_workflow_run_details` will be unavailable on GitHub. If you need GitHub parity, use upstream [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action).
 
 #### Enabling CI/CD Access
 
@@ -392,9 +394,9 @@ To allow Claude to view workflow run results, job logs, and CI status:
 
 3. **Claude will automatically get access to CI/CD tools**:
    When you enable `actions: read`, Claude can use the following MCP tools:
-   - `mcp__github_actions__get_ci_status` - View workflow run statuses
-   - `mcp__github_actions__get_workflow_run_details` - Get detailed workflow information
-   - `mcp__github_actions__download_job_log` - Download and analyze job logs
+   - `mcp__gitea_actions__get_ci_status` - List Gitea Actions tasks for the current PR (filtered by head SHA) with a pass/fail/pending summary
+   - `mcp__gitea_actions__get_workflow_run_details` - List sibling tasks sharing a `run_number`. **No step-level info**: Gitea 1.24's REST API doesn't expose it; use `download_job_log` to inspect content
+   - `mcp__gitea_actions__download_job_log` - Download the raw log for a task id to disk for analysis
 
 #### Example: Debugging Failed CI Runs
 
